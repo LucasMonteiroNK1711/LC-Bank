@@ -127,6 +127,7 @@ function renderDashboard() {
 
   renderFlowChart();
   renderExpenseChart();
+  ;
 }
 
 function renderSelects() {
@@ -368,6 +369,7 @@ function renderTransactions() {
           <strong>${t.description}</strong>
           <div class="meta">${getCategoryName(t.categoryId)} • ${getBankName(t.bankId)} • ${new Date(`${t.date}T12:00:00`).toLocaleDateString('pt-BR')}</div>
           <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'} • ${getPaymentLabel(t)}</div>
+          <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'}</div>
         </div>
         <div class="list-actions">
           <strong>${fmtMoney(t.amount)}</strong>
@@ -387,6 +389,7 @@ function renderStatement() {
       entryType: 'transaction',
       date: t.date,
       text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description} (${getPaymentLabel(t)})`,
+      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
       value: t.type === 'expense' ? -t.amount : t.amount,
       status: t.status === 'paid' ? 'Compensado' : 'Previsto',
       canToggleStatus: true,
@@ -400,6 +403,21 @@ function renderStatement() {
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
       canToggleStatus: false
+      text: `Fatura ${getCardName(i.cardId)}`,
+      value: -i.amount,
+      status: i.paid ? 'Paga' : 'Em aberto',
+      canToggleStatus: false
+      date: t.date,
+      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
+      value: t.type === 'expense' ? -t.amount : t.amount,
+      status: t.status === 'paid' ? 'Compensado' : 'Previsto'
+    })),
+    ...state.invoices.map((i) => ({
+      id: `i-${i.id}`,
+      date: i.dueDate,
+      text: `Fatura ${getCardName(i.cardId)}`,
+      value: -i.amount,
+      status: i.paid ? 'Paga' : 'Em aberto'
     }))
   ].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -424,6 +442,7 @@ function renderStatement() {
               : ''
           }
         </div>
+        <strong style="color:${e.value < 0 ? 'var(--danger)' : 'var(--success)'}">${fmtMoney(e.value)}</strong>
       </article>`
     )
     .join('');
@@ -598,6 +617,8 @@ function bindForms() {
     const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
 
     const transaction = {
+
+    state.transactions.push({
       id: crypto.randomUUID(),
       description: data.get('description').trim(),
       amount,
@@ -623,6 +644,17 @@ function bindForms() {
 
     e.target.reset();
     syncTransactionFormControls();
+      status
+    });
+
+    if (status === 'paid') {
+      const bank = state.banks.find((b) => b.id === bankId);
+      if (bank) {
+        bank.balance += type === 'income' ? amount : -amount;
+      }
+    }
+
+    e.target.reset();
     saveState();
     render();
   });
