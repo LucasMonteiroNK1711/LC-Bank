@@ -127,7 +127,7 @@ function renderDashboard() {
 
   renderFlowChart();
   renderExpenseChart();
-  `;
+  ;
 }
 
 function renderSelects() {
