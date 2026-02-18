@@ -144,6 +144,11 @@ function renderSelects() {
     state.cards,
     (c) => `<option value="${c.id}">${c.name}</option>`
   );
+
+  document.getElementById('transaction-card').innerHTML = optionHTML(
+    state.cards,
+    (c) => `<option value="${c.id}">${c.name}</option>`
+  );
 }
 
 function getCategoryName(id) {
@@ -152,6 +157,77 @@ function getCategoryName(id) {
 
 function getBankName(id) {
   return state.banks.find((b) => b.id === id)?.name ?? 'Sem banco';
+}
+
+function getPaymentLabel(transaction) {
+  if (transaction.paymentMethod === 'credit_card') {
+    const card = state.cards.find((c) => c.id === transaction.cardId);
+    const cardName = card?.name ?? 'Cartão removido';
+    const installments = transaction.installments && transaction.installments > 1 ? ` • ${transaction.installments}x` : '';
+    return `Cartão: ${cardName}${installments}`;
+  }
+
+  return 'Débito/PIX/Transferência';
+}
+
+function addMonths(dateStr, months) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1 + months, day);
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function splitAmountInInstallments(amount, count) {
+  const totalCents = Math.round(amount * 100);
+  const base = Math.floor(totalCents / count);
+  const remainder = totalCents % count;
+
+  return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
+}
+
+function createInvoicesForCardPurchase(transaction) {
+  const installments = transaction.installments || 1;
+  const amounts = splitAmountInInstallments(transaction.amount, installments);
+
+  amounts.forEach((partAmount, index) => {
+    state.invoices.push({
+      id: crypto.randomUUID(),
+      cardId: transaction.cardId,
+      amount: partAmount,
+      dueDate: addMonths(transaction.date, index),
+      paid: false,
+      sourceTransactionId: transaction.id,
+      installment: index + 1,
+      installmentCount: installments,
+      description: transaction.description
+    });
+  });
+}
+
+function syncTransactionFormControls() {
+  const form = document.getElementById('transaction-form');
+  const type = form.querySelector('select[name="type"]').value;
+  const paymentMethodSelect = form.querySelector('select[name="paymentMethod"]');
+  if (type !== 'expense') {
+    paymentMethodSelect.value = 'bank';
+  }
+
+  const paymentMethod = paymentMethodSelect.value;
+  const cardWrapper = document.getElementById('transaction-card-wrapper');
+  const installmentsWrapper = document.getElementById('transaction-installments-wrapper');
+  const cardSelect = document.getElementById('transaction-card');
+  const installmentsInput = document.getElementById('transaction-installments');
+
+  const enableCreditCard = type === 'expense' && paymentMethod === 'credit_card';
+  cardWrapper.classList.toggle('hidden', !enableCreditCard);
+  installmentsWrapper.classList.toggle('hidden', !enableCreditCard);
+  cardSelect.required = enableCreditCard;
+
+  if (!enableCreditCard) {
+    installmentsInput.value = '1';
+  }
 }
 
 function getMonthlyFlow() {
@@ -292,6 +368,7 @@ function renderTransactions() {
         <div>
           <strong>${t.description}</strong>
           <div class="meta">${getCategoryName(t.categoryId)} • ${getBankName(t.bankId)} • ${new Date(`${t.date}T12:00:00`).toLocaleDateString('pt-BR')}</div>
+          <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'} • ${getPaymentLabel(t)}</div>
           <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'}</div>
         </div>
         <div class="list-actions">
@@ -311,6 +388,7 @@ function renderStatement() {
       transactionId: t.id,
       entryType: 'transaction',
       date: t.date,
+      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description} (${getPaymentLabel(t)})`,
       text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
       value: t.type === 'expense' ? -t.amount : t.amount,
       status: t.status === 'paid' ? 'Compensado' : 'Previsto',
@@ -321,6 +399,10 @@ function renderStatement() {
       id: `i-${i.id}`,
       entryType: 'invoice',
       date: i.dueDate,
+      text: `Fatura ${getCardName(i.cardId)}${i.installmentCount ? ` • ${i.installment}/${i.installmentCount}` : ''}${i.description ? ` • ${i.description}` : ''}`,
+      value: -i.amount,
+      status: i.paid ? 'Paga' : 'Em aberto',
+      canToggleStatus: false
       text: `Fatura ${getCardName(i.cardId)}`,
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
@@ -397,6 +479,7 @@ function renderBanksAndCards() {
                 <div>
                   <strong>Fatura: ${fmtMoney(inv.amount)}</strong>
                   <div class="meta">Vencimento: ${new Date(`${inv.dueDate}T12:00:00`).toLocaleDateString('pt-BR')} • ${inv.paid ? 'Paga' : 'Em aberto'}</div>
+                  ${inv.description ? `<div class="meta">${inv.description}${inv.installmentCount ? ` • ${inv.installment}/${inv.installmentCount}` : ''}</div>` : ''}
                 </div>
                 <div class="list-actions">
                   ${
@@ -446,6 +529,7 @@ function renderCategories() {
 
 function removeTransaction(id) {
   state.transactions = state.transactions.filter((t) => t.id !== id);
+  state.invoices = state.invoices.filter((inv) => inv.sourceTransactionId !== id);
 }
 
 function removeBank(id) {
@@ -459,6 +543,7 @@ function removeBank(id) {
 function removeCard(id) {
   state.cards = state.cards.filter((c) => c.id !== id);
   state.invoices = state.invoices.filter((i) => i.cardId !== id);
+  state.transactions = state.transactions.map((t) => (t.cardId === id ? { ...t, cardId: '' } : t));
 }
 
 function removeCategory(id) {
@@ -479,6 +564,8 @@ function markInvoicePaid(id) {
 }
 
 function applyTransactionOnBank(transaction, operation) {
+  if (transaction.paymentMethod === 'credit_card') return;
+
   const bank = state.banks.find((b) => b.id === transaction.bankId);
   if (!bank) return;
 
@@ -525,6 +612,11 @@ function bindForms() {
     const type = data.get('type');
     const bankId = data.get('bank');
     const status = data.get('status');
+    const paymentMethod = data.get('paymentMethod');
+    const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
+    const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
+
+    const transaction = {
 
     state.transactions.push({
       id: crypto.randomUUID(),
@@ -534,6 +626,24 @@ function bindForms() {
       categoryId: data.get('category'),
       bankId,
       date: data.get('date'),
+      status,
+      paymentMethod,
+      cardId: isCreditCardPurchase ? data.get('cardId') : '',
+      installments
+    };
+
+    state.transactions.push(transaction);
+
+    if (isCreditCardPurchase) {
+      createInvoicesForCardPurchase(transaction);
+    }
+
+    if (status === 'paid') {
+      applyTransactionOnBank(transaction, 'add');
+    }
+
+    e.target.reset();
+    syncTransactionFormControls();
       status
     });
 
@@ -547,6 +657,14 @@ function bindForms() {
     e.target.reset();
     saveState();
     render();
+  });
+
+  document.getElementById('transaction-form').querySelector('select[name="type"]').addEventListener('change', () => {
+    syncTransactionFormControls();
+  });
+
+  document.getElementById('transaction-payment-method').addEventListener('change', () => {
+    syncTransactionFormControls();
   });
 
   document.getElementById('bank-form').addEventListener('submit', (e) => {
@@ -618,4 +736,5 @@ function initThemeToggle() {
 bindNav();
 bindForms();
 initThemeToggle();
+syncTransactionFormControls();
 render();

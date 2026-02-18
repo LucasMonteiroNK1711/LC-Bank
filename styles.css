@@ -130,6 +130,7 @@ button.success { background: var(--success); }
 }
 .metric strong { display: block; margin-top: .2rem; font-size: 1.25rem; }
 .mt { margin-top: 1.4rem; }
+.hidden { display: none; }
 
 .chart-canvas {
   width: 100%;

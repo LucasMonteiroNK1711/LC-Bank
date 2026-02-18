@@ -62,6 +62,18 @@
                 <label>Banco
                   <select name="bank" id="transaction-bank"></select>
                 </label>
+                <label>Forma de pagamento
+                  <select name="paymentMethod" id="transaction-payment-method">
+                    <option value="bank">Débito/PIX/Transferência</option>
+                    <option value="credit_card">Cartão de crédito</option>
+                  </select>
+                </label>
+                <label id="transaction-card-wrapper" class="hidden">Cartão de crédito
+                  <select name="cardId" id="transaction-card"></select>
+                </label>
+                <label id="transaction-installments-wrapper" class="hidden">Parcelas
+                  <input type="number" name="installments" id="transaction-installments" min="1" step="1" value="1" />
+                </label>
                 <label>Data<input required type="date" name="date" /></label>
                 <label>Status
                   <select name="status">
