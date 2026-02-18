@@ -113,6 +113,20 @@ function renderDashboard() {
         <p>${state.categories.length} categorias disponíveis</p>
       </section>
     </div>
+    <div class="grid-2 mt">
+      <section class="card">
+        <h3>Fluxo financeiro mensal</h3>
+        <canvas id="flow-chart" class="chart-canvas" width="600" height="260" aria-label="Gráfico de fluxo mensal"></canvas>
+      </section>
+      <section class="card">
+        <h3>Despesas por categoria</h3>
+        <canvas id="expense-chart" class="chart-canvas" width="600" height="260" aria-label="Gráfico de despesas por categoria"></canvas>
+      </section>
+    </div>
+  `;
+
+  renderFlowChart();
+  renderExpenseChart();
   `;
 }
 
@@ -138,6 +152,128 @@ function getCategoryName(id) {
 
 function getBankName(id) {
   return state.banks.find((b) => b.id === id)?.name ?? 'Sem banco';
+}
+
+function getMonthlyFlow() {
+  const months = [];
+  const current = new Date();
+  for (let i = 5; i >= 0; i -= 1) {
+    const d = new Date(current.getFullYear(), current.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    months.push({ key, label: d.toLocaleDateString('pt-BR', { month: 'short' }) });
+  }
+
+  return months.map((month) => {
+    const monthItems = state.transactions.filter((t) => t.date.startsWith(month.key));
+    const income = monthItems.filter((t) => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
+    const expense = monthItems.filter((t) => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
+    return { ...month, income, expense };
+  });
+}
+
+function renderFlowChart() {
+  const canvas = document.getElementById('flow-chart');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const pad = 35;
+  ctx.clearRect(0, 0, w, h);
+
+  const data = getMonthlyFlow();
+  const maxValue = Math.max(1, ...data.flatMap((m) => [m.income, m.expense]));
+  const slotWidth = (w - pad * 2) / data.length;
+  const barWidth = slotWidth * 0.32;
+
+  ctx.strokeStyle = 'rgba(140,160,210,0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(pad, h - pad);
+  ctx.lineTo(w - pad, h - pad);
+  ctx.stroke();
+
+  data.forEach((d, idx) => {
+    const xBase = pad + idx * slotWidth + slotWidth * 0.18;
+    const incomeHeight = ((h - pad * 2) * d.income) / maxValue;
+    const expenseHeight = ((h - pad * 2) * d.expense) / maxValue;
+
+    ctx.fillStyle = '#10b981';
+    ctx.fillRect(xBase, h - pad - incomeHeight, barWidth, incomeHeight);
+
+    ctx.fillStyle = '#ef4444';
+    ctx.fillRect(xBase + barWidth + 6, h - pad - expenseHeight, barWidth, expenseHeight);
+
+    ctx.fillStyle = 'rgba(160,178,230,0.9)';
+    ctx.font = '12px Inter';
+    ctx.fillText(d.label, xBase - 4, h - 12);
+  });
+
+  ctx.fillStyle = 'rgba(160,178,230,0.9)';
+  ctx.fillText('Receitas', pad, 16);
+  ctx.fillStyle = '#10b981';
+  ctx.fillRect(pad + 55, 8, 10, 10);
+  ctx.fillStyle = 'rgba(160,178,230,0.9)';
+  ctx.fillText('Despesas', pad + 80, 16);
+  ctx.fillStyle = '#ef4444';
+  ctx.fillRect(pad + 138, 8, 10, 10);
+}
+
+function renderExpenseChart() {
+  const canvas = document.getElementById('expense-chart');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  ctx.clearRect(0, 0, w, h);
+
+  const expenses = state.transactions.filter((t) => t.type === 'expense');
+  const grouped = expenses.reduce((acc, t) => {
+    const name = getCategoryName(t.categoryId);
+    acc[name] = (acc[name] || 0) + t.amount;
+    return acc;
+  }, {});
+
+  const entries = Object.entries(grouped)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+
+  if (!entries.length) {
+    ctx.fillStyle = 'rgba(160,178,230,0.9)';
+    ctx.font = '14px Inter';
+    ctx.fillText('Adicione despesas para visualizar o gráfico.', 22, h / 2);
+    return;
+  }
+
+  const colors = ['#3b82f6', '#8b5cf6', '#06b6d4', '#f59e0b', '#ef4444'];
+  const total = entries.reduce((sum, [, value]) => sum + value, 0);
+  const cx = 130;
+  const cy = h / 2;
+  const radius = 80;
+
+  let start = -Math.PI / 2;
+  entries.forEach(([name, value], idx) => {
+    const slice = (value / total) * Math.PI * 2;
+    const color = colors[idx % colors.length];
+
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, radius, start, start + slice);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    start += slice;
+
+    const legendY = 35 + idx * 34;
+    ctx.fillStyle = color;
+    ctx.fillRect(270, legendY - 10, 14, 14);
+    ctx.fillStyle = 'rgba(160,178,230,0.95)';
+    ctx.font = '13px Inter';
+    const pct = ((value / total) * 100).toFixed(1);
+    ctx.fillText(`${name}: ${pct}%`, 292, legendY + 1);
+    ctx.fillText(fmtMoney(value), 292, legendY + 16);
+  });
 }
 
 function renderTransactions() {

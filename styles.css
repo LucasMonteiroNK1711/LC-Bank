@@ -131,6 +131,15 @@ button.success { background: var(--success); }
 .metric strong { display: block; margin-top: .2rem; font-size: 1.25rem; }
 .mt { margin-top: 1.4rem; }
 
+.chart-canvas {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--border);
+  border-radius: .9rem;
+  background: color-mix(in srgb, var(--bg-soft) 92%, transparent);
+  padding: .2rem;
+}
+
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: sticky; top: 0; z-index: 3; }
