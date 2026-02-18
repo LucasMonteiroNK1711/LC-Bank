@@ -127,6 +127,7 @@ function renderDashboard() {
 
   renderFlowChart();
   renderExpenseChart();
+  ;
 }
 
 function renderSelects() {
@@ -324,6 +325,17 @@ function renderStatement() {
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
       canToggleStatus: false
+      date: t.date,
+      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
+      value: t.type === 'expense' ? -t.amount : t.amount,
+      status: t.status === 'paid' ? 'Compensado' : 'Previsto'
+    })),
+    ...state.invoices.map((i) => ({
+      id: `i-${i.id}`,
+      date: i.dueDate,
+      text: `Fatura ${getCardName(i.cardId)}`,
+      value: -i.amount,
+      status: i.paid ? 'Paga' : 'Em aberto'
     }))
   ].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -348,6 +360,7 @@ function renderStatement() {
               : ''
           }
         </div>
+        <strong style="color:${e.value < 0 ? 'var(--danger)' : 'var(--success)'}">${fmtMoney(e.value)}</strong>
       </article>`
     )
     .join('');
