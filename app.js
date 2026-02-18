@@ -402,11 +402,11 @@ function renderStatement() {
       text: `Fatura ${getCardName(i.cardId)}${i.installmentCount ? ` • ${i.installment}/${i.installmentCount}` : ''}${i.description ? ` • ${i.description}` : ''}`,
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
-      canToggleStatus: false
+      canToggleStatus: false,
       text: `Fatura ${getCardName(i.cardId)}`,
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
-      canToggleStatus: false
+      canToggleStatus: false,
       date: t.date,
       text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
       value: t.type === 'expense' ? -t.amount : t.amount,
@@ -606,58 +606,50 @@ document.body.addEventListener('click', (event) => {
 
 function bindForms() {
   document.getElementById('transaction-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const data = new FormData(e.target);
-    const amount = Number(data.get('amount'));
-    const type = data.get('type');
-    const bankId = data.get('bank');
-    const status = data.get('status');
-    const paymentMethod = data.get('paymentMethod');
-    const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
-    const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
+  e.preventDefault();
+  const data = new FormData(e.target);
 
-    const transaction = {
+  const amount = Number(data.get('amount'));
+  const type = data.get('type');
+  const bankId = data.get('bank');
+  const status = data.get('status');
+  const paymentMethod = data.get('paymentMethod');
 
-    state.transactions.push({
-      id: crypto.randomUUID(),
-      description: data.get('description').trim(),
-      amount,
-      type,
-      categoryId: data.get('category'),
-      bankId,
-      date: data.get('date'),
-      status,
-      paymentMethod,
-      cardId: isCreditCardPurchase ? data.get('cardId') : '',
-      installments
-    };
+  const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
+  const installments = isCreditCardPurchase
+    ? Math.max(1, Number(data.get('installments')) || 1)
+    : 1;
 
-    state.transactions.push(transaction);
+  const transaction = {
+    id: crypto.randomUUID(),
+    description: data.get('description').trim(),
+    amount,
+    type,
+    categoryId: data.get('category'),
+    bankId,
+    date: data.get('date'),
+    status,
+    paymentMethod,
+    cardId: isCreditCardPurchase ? data.get('cardId') : '',
+    installments
+  };
 
-    if (isCreditCardPurchase) {
-      createInvoicesForCardPurchase(transaction);
-    }
+  state.transactions.push(transaction);
 
-    if (status === 'paid') {
-      applyTransactionOnBank(transaction, 'add');
-    }
+  if (isCreditCardPurchase) {
+    createInvoicesForCardPurchase(transaction);
+  }
 
-    e.target.reset();
-    syncTransactionFormControls();
-      status
-    });
+  if (status === 'paid') {
+    applyTransactionOnBank(transaction, 'add');
+  }
 
-    if (status === 'paid') {
-      const bank = state.banks.find((b) => b.id === bankId);
-      if (bank) {
-        bank.balance += type === 'income' ? amount : -amount;
-      }
-    }
+  e.target.reset();
+  syncTransactionFormControls();
+  saveState();
+  render();
+});
 
-    e.target.reset();
-    saveState();
-    render();
-  });
 
   document.getElementById('transaction-form').querySelector('select[name="type"]').addEventListener('change', () => {
     syncTransactionFormControls();
