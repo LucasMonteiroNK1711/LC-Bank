@@ -308,6 +308,23 @@ function renderStatement() {
   const entries = [
     ...state.transactions.map((t) => ({
       id: `t-${t.id}`,
+      transactionId: t.id,
+      entryType: 'transaction',
+      date: t.date,
+      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
+      value: t.type === 'expense' ? -t.amount : t.amount,
+      status: t.status === 'paid' ? 'Compensado' : 'Previsto',
+      canToggleStatus: true,
+      toggleLabel: t.status === 'paid' ? 'Marcar como pendente' : 'Marcar como pago/recebido'
+    })),
+    ...state.invoices.map((i) => ({
+      id: `i-${i.id}`,
+      entryType: 'invoice',
+      date: i.dueDate,
+      text: `Fatura ${getCardName(i.cardId)}`,
+      value: -i.amount,
+      status: i.paid ? 'Paga' : 'Em aberto',
+      canToggleStatus: false
       date: t.date,
       text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
       value: t.type === 'expense' ? -t.amount : t.amount,
@@ -334,6 +351,14 @@ function renderStatement() {
         <div>
           <strong>${e.text}</strong>
           <div class="meta">${new Date(`${e.date}T12:00:00`).toLocaleDateString('pt-BR')} • ${e.status}</div>
+        </div>
+        <div class="list-actions">
+          <strong style="color:${e.value < 0 ? 'var(--danger)' : 'var(--success)'}">${fmtMoney(e.value)}</strong>
+          ${
+            e.canToggleStatus
+              ? `<button class="secondary small" data-action="toggle-transaction-status" data-id="${e.transactionId}">${e.toggleLabel}</button>`
+              : ''
+          }
         </div>
         <strong style="color:${e.value < 0 ? 'var(--danger)' : 'var(--success)'}">${fmtMoney(e.value)}</strong>
       </article>`
@@ -453,6 +478,28 @@ function markInvoicePaid(id) {
   invoice.paid = true;
 }
 
+function applyTransactionOnBank(transaction, operation) {
+  const bank = state.banks.find((b) => b.id === transaction.bankId);
+  if (!bank) return;
+
+  const signedAmount = transaction.type === 'income' ? transaction.amount : -transaction.amount;
+  bank.balance += operation === 'add' ? signedAmount : -signedAmount;
+}
+
+function toggleTransactionStatus(id) {
+  const transaction = state.transactions.find((t) => t.id === id);
+  if (!transaction) return;
+
+  if (transaction.status === 'paid') {
+    applyTransactionOnBank(transaction, 'remove');
+    transaction.status = 'pending';
+    return;
+  }
+
+  applyTransactionOnBank(transaction, 'add');
+  transaction.status = 'paid';
+}
+
 document.body.addEventListener('click', (event) => {
   const btn = event.target.closest('button[data-action]');
   if (!btn) return;
@@ -464,6 +511,7 @@ document.body.addEventListener('click', (event) => {
   if (action === 'remove-invoice') state.invoices = state.invoices.filter((i) => i.id !== id);
   if (action === 'remove-category') removeCategory(id);
   if (action === 'pay-invoice') markInvoicePaid(id);
+  if (action === 'toggle-transaction-status') toggleTransactionStatus(id);
 
   saveState();
   render();
