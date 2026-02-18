@@ -19,7 +19,15 @@ function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return structuredClone(defaultState);
   try {
-    return { ...structuredClone(defaultState), ...JSON.parse(raw) };
+    const parsed = { ...structuredClone(defaultState), ...JSON.parse(raw) };
+    parsed.cards = (parsed.cards || []).map((card) => ({ ...card, dueDay: card.dueDay || 10 }));
+    parsed.transactions = (parsed.transactions || []).map((t) => ({
+      paymentMethod: 'bank',
+      installments: 1,
+      cardId: '',
+      ...t
+    }));
+    return parsed;
   } catch {
     return structuredClone(defaultState);
   }
@@ -127,7 +135,6 @@ function renderDashboard() {
 
   renderFlowChart();
   renderExpenseChart();
-  ;
 }
 
 function renderSelects() {
@@ -139,11 +146,6 @@ function renderSelects() {
   const bankOptions = optionHTML(state.banks, (b) => `<option value="${b.id}">${b.name}</option>`);
   document.getElementById('transaction-bank').innerHTML = bankOptions;
   document.getElementById('card-bank').innerHTML = bankOptions;
-
-  document.getElementById('invoice-card').innerHTML = optionHTML(
-    state.cards,
-    (c) => `<option value="${c.id}">${c.name}</option>`
-  );
 
   document.getElementById('transaction-card').innerHTML = optionHTML(
     state.cards,
@@ -170,15 +172,6 @@ function getPaymentLabel(transaction) {
   return 'Débito/PIX/Transferência';
 }
 
-function addMonths(dateStr, months) {
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const d = new Date(year, month - 1 + months, day);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
 function splitAmountInInstallments(amount, count) {
   const totalCents = Math.round(amount * 100);
   const base = Math.floor(totalCents / count);
@@ -187,21 +180,72 @@ function splitAmountInInstallments(amount, count) {
   return Array.from({ length: count }, (_, index) => (base + (index < remainder ? 1 : 0)) / 100);
 }
 
+function daysInMonth(year, monthIndex) {
+  return new Date(year, monthIndex + 1, 0).getDate();
+}
+
+function buildDate(year, monthIndex, day) {
+  const safeDay = Math.min(day, daysInMonth(year, monthIndex));
+  return new Date(year, monthIndex, safeDay);
+}
+
+function formatDate(dateObj) {
+  const yyyy = dateObj.getFullYear();
+  const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const dd = String(dateObj.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getNextInvoiceDueDate(card, purchaseDateStr, installmentOffset = 0) {
+  const [year, month, day] = purchaseDateStr.split('-').map(Number);
+  const purchaseDate = new Date(year, month - 1, day);
+  const dueDay = Math.max(1, Math.min(28, Number(card.dueDay) || 10));
+
+  const dueThisMonth = buildDate(purchaseDate.getFullYear(), purchaseDate.getMonth(), dueDay);
+  const cutoffThisMonth = new Date(dueThisMonth);
+  cutoffThisMonth.setDate(cutoffThisMonth.getDate() - 5);
+
+  const baseDue = purchaseDate <= cutoffThisMonth ? dueThisMonth : buildDate(purchaseDate.getFullYear(), purchaseDate.getMonth() + 1, dueDay);
+  const dueDate = buildDate(baseDue.getFullYear(), baseDue.getMonth() + installmentOffset, dueDay);
+
+  return formatDate(dueDate);
+}
+
+function upsertInvoice(cardId, dueDate, amount, metadata) {
+  const existing = state.invoices.find((inv) => inv.cardId === cardId && inv.dueDate === dueDate && !inv.paid);
+
+  if (existing) {
+    existing.amount += amount;
+    existing.items = existing.items || [];
+    existing.items.push(metadata);
+    return;
+  }
+
+  state.invoices.push({
+    id: crypto.randomUUID(),
+    cardId,
+    amount,
+    dueDate,
+    paid: false,
+    items: [metadata]
+  });
+}
+
 function createInvoicesForCardPurchase(transaction) {
+  const card = state.cards.find((c) => c.id === transaction.cardId);
+  if (!card) return;
+
   const installments = transaction.installments || 1;
   const amounts = splitAmountInInstallments(transaction.amount, installments);
 
   amounts.forEach((partAmount, index) => {
-    state.invoices.push({
-      id: crypto.randomUUID(),
-      cardId: transaction.cardId,
-      amount: partAmount,
-      dueDate: addMonths(transaction.date, index),
-      paid: false,
+    const dueDate = getNextInvoiceDueDate(card, transaction.date, index);
+    upsertInvoice(transaction.cardId, dueDate, partAmount, {
       sourceTransactionId: transaction.id,
+      description: transaction.description,
       installment: index + 1,
       installmentCount: installments,
-      description: transaction.description
+      amount: partAmount
     });
   });
 }
@@ -369,7 +413,6 @@ function renderTransactions() {
           <strong>${t.description}</strong>
           <div class="meta">${getCategoryName(t.categoryId)} • ${getBankName(t.bankId)} • ${new Date(`${t.date}T12:00:00`).toLocaleDateString('pt-BR')}</div>
           <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'} • ${getPaymentLabel(t)}</div>
-          <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'}</div>
         </div>
         <div class="list-actions">
           <strong>${fmtMoney(t.amount)}</strong>
@@ -389,7 +432,6 @@ function renderStatement() {
       entryType: 'transaction',
       date: t.date,
       text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description} (${getPaymentLabel(t)})`,
-      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
       value: t.type === 'expense' ? -t.amount : t.amount,
       status: t.status === 'paid' ? 'Compensado' : 'Previsto',
       canToggleStatus: true,
@@ -399,25 +441,10 @@ function renderStatement() {
       id: `i-${i.id}`,
       entryType: 'invoice',
       date: i.dueDate,
-      text: `Fatura ${getCardName(i.cardId)}${i.installmentCount ? ` • ${i.installment}/${i.installmentCount}` : ''}${i.description ? ` • ${i.description}` : ''}`,
+      text: `Fatura ${getCardName(i.cardId)}${i.items?.length ? ` • ${i.items.length} compra(s)` : ''}`,
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
-      canToggleStatus: false,
-      text: `Fatura ${getCardName(i.cardId)}`,
-      value: -i.amount,
-      status: i.paid ? 'Paga' : 'Em aberto',
-      canToggleStatus: false,
-      date: t.date,
-      text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description}`,
-      value: t.type === 'expense' ? -t.amount : t.amount,
-      status: t.status === 'paid' ? 'Compensado' : 'Previsto'
-    })),
-    ...state.invoices.map((i) => ({
-      id: `i-${i.id}`,
-      date: i.dueDate,
-      text: `Fatura ${getCardName(i.cardId)}`,
-      value: -i.amount,
-      status: i.paid ? 'Paga' : 'Em aberto'
+      canToggleStatus: false
     }))
   ].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -442,7 +469,6 @@ function renderStatement() {
               : ''
           }
         </div>
-        <strong style="color:${e.value < 0 ? 'var(--danger)' : 'var(--success)'}">${fmtMoney(e.value)}</strong>
       </article>`
     )
     .join('');
@@ -479,7 +505,13 @@ function renderBanksAndCards() {
                 <div>
                   <strong>Fatura: ${fmtMoney(inv.amount)}</strong>
                   <div class="meta">Vencimento: ${new Date(`${inv.dueDate}T12:00:00`).toLocaleDateString('pt-BR')} • ${inv.paid ? 'Paga' : 'Em aberto'}</div>
-                  ${inv.description ? `<div class="meta">${inv.description}${inv.installmentCount ? ` • ${inv.installment}/${inv.installmentCount}` : ''}</div>` : ''}
+                  ${
+                    inv.items?.length
+                      ? `<div class="meta">${inv.items
+                          .map((item) => `${item.description}${item.installmentCount > 1 ? ` (${item.installment}/${item.installmentCount})` : ''}`)
+                          .join(' • ')}</div>`
+                      : ''
+                  }
                 </div>
                 <div class="list-actions">
                   ${
@@ -499,7 +531,7 @@ function renderBanksAndCards() {
         <div style="display:flex;justify-content:space-between;align-items:center;">
           <div>
             <strong>${c.name}</strong>
-            <div class="meta">${getBankName(c.bankId)} • Limite ${fmtMoney(c.limit)}</div>
+            <div class="meta">${getBankName(c.bankId)} • Limite ${fmtMoney(c.limit)} • Vencimento dia ${c.dueDay || 10}</div>
           </div>
           <button class="danger small" data-action="remove-card" data-id="${c.id}">Remover cartão</button>
         </div>
@@ -529,7 +561,15 @@ function renderCategories() {
 
 function removeTransaction(id) {
   state.transactions = state.transactions.filter((t) => t.id !== id);
-  state.invoices = state.invoices.filter((inv) => inv.sourceTransactionId !== id);
+
+  state.invoices = state.invoices
+    .map((inv) => {
+      if (!inv.items?.length) return inv;
+      const filteredItems = inv.items.filter((item) => item.sourceTransactionId !== id);
+      const newAmount = filteredItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      return { ...inv, items: filteredItems, amount: Number(newAmount.toFixed(2)) };
+    })
+    .filter((inv) => !inv.items || inv.items.length || inv.amount > 0);
 }
 
 function removeBank(id) {
@@ -606,50 +646,45 @@ document.body.addEventListener('click', (event) => {
 
 function bindForms() {
   document.getElementById('transaction-form').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const data = new FormData(e.target);
+    e.preventDefault();
+    const data = new FormData(e.target);
+    const amount = Number(data.get('amount'));
+    const type = data.get('type');
+    const bankId = data.get('bank');
+    const status = data.get('status');
+    const paymentMethod = data.get('paymentMethod');
+    const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
+    const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
 
-  const amount = Number(data.get('amount'));
-  const type = data.get('type');
-  const bankId = data.get('bank');
-  const status = data.get('status');
-  const paymentMethod = data.get('paymentMethod');
+    const transaction = {
+      id: crypto.randomUUID(),
+      description: data.get('description').trim(),
+      amount,
+      type,
+      categoryId: data.get('category'),
+      bankId,
+      date: data.get('date'),
+      status,
+      paymentMethod,
+      cardId: isCreditCardPurchase ? data.get('cardId') : '',
+      installments
+    };
 
-  const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
-  const installments = isCreditCardPurchase
-    ? Math.max(1, Number(data.get('installments')) || 1)
-    : 1;
+    state.transactions.push(transaction);
 
-  const transaction = {
-    id: crypto.randomUUID(),
-    description: data.get('description').trim(),
-    amount,
-    type,
-    categoryId: data.get('category'),
-    bankId,
-    date: data.get('date'),
-    status,
-    paymentMethod,
-    cardId: isCreditCardPurchase ? data.get('cardId') : '',
-    installments
-  };
+    if (isCreditCardPurchase) {
+      createInvoicesForCardPurchase(transaction);
+    }
 
-  state.transactions.push(transaction);
+    if (status === 'paid') {
+      applyTransactionOnBank(transaction, 'add');
+    }
 
-  if (isCreditCardPurchase) {
-    createInvoicesForCardPurchase(transaction);
-  }
-
-  if (status === 'paid') {
-    applyTransactionOnBank(transaction, 'add');
-  }
-
-  e.target.reset();
-  syncTransactionFormControls();
-  saveState();
-  render();
-});
-
+    e.target.reset();
+    syncTransactionFormControls();
+    saveState();
+    render();
+  });
 
   document.getElementById('transaction-form').querySelector('select[name="type"]').addEventListener('change', () => {
     syncTransactionFormControls();
@@ -675,22 +710,8 @@ function bindForms() {
       id: crypto.randomUUID(),
       name: data.get('name').trim(),
       bankId: data.get('bank'),
-      limit: Number(data.get('limit'))
-    });
-    e.target.reset();
-    saveState();
-    render();
-  });
-
-  document.getElementById('invoice-form').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const data = new FormData(e.target);
-    state.invoices.push({
-      id: crypto.randomUUID(),
-      cardId: data.get('card'),
-      amount: Number(data.get('amount')),
-      dueDate: data.get('dueDate'),
-      paid: false
+      limit: Number(data.get('limit')),
+      dueDay: Math.max(1, Math.min(28, Number(data.get('dueDay')) || 10))
     });
     e.target.reset();
     saveState();

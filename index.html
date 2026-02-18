@@ -108,17 +108,8 @@
                   <select name="bank" id="card-bank"></select>
                 </label>
                 <label>Limite (R$)<input type="number" min="0" step="0.01" required name="limit" /></label>
+                <label>Dia do vencimento da fatura<input type="number" min="1" max="28" step="1" required name="dueDay" value="10" /></label>
                 <button type="submit">Adicionar cartão</button>
-              </form>
-
-              <h3 class="mt">Nova fatura</h3>
-              <form id="invoice-form" class="stack">
-                <label>Cartão
-                  <select name="card" id="invoice-card"></select>
-                </label>
-                <label>Valor da fatura (R$)<input type="number" min="0" step="0.01" required name="amount" /></label>
-                <label>Vencimento<input required type="date" name="dueDate" /></label>
-                <button type="submit">Adicionar fatura</button>
               </form>
             </div>
 
