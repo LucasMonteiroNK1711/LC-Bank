@@ -39,6 +39,21 @@
         <section id="extrato" class="view">
           <div class="card">
             <h3>Extrato consolidado</h3>
+            <div class="filters-row">
+              <label>Mês
+                <select id="statement-filter-month"></select>
+              </label>
+              <label>Tipo
+                <select id="statement-filter-type">
+                  <option value="all">Todos</option>
+                  <option value="expense">Despesas</option>
+                  <option value="income">Receitas</option>
+                </select>
+              </label>
+              <label>Categoria
+                <select id="statement-filter-category"></select>
+              </label>
+            </div>
             <div id="statement-list" class="list"></div>
           </div>
         </section>

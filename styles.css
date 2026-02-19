@@ -88,6 +88,13 @@ h2 { margin: .25rem 0 0; }
 }
 
 .stack { display: flex; flex-direction: column; gap: .7rem; }
+
+.filters-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
 label { display: flex; flex-direction: column; gap: .35rem; font-size: .9rem; color: var(--muted); }
 input, select, button {
   border-radius: .65rem;
@@ -145,5 +152,5 @@ button.success { background: var(--success); }
   .app-shell { grid-template-columns: 1fr; }
   .sidebar { position: sticky; top: 0; z-index: 3; }
   .main-nav { flex-direction: row; overflow: auto; }
-  .grid-2, .metric-grid { grid-template-columns: 1fr; }
+  .grid-2, .metric-grid, .filters-row { grid-template-columns: 1fr; }
 }

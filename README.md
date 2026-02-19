@@ -10,6 +10,8 @@ Aplicação web responsiva para controle de finanças pessoais com foco em UX de
 - Compras no cartão geram faturas automaticamente e parcelamentos criam lançamentos para os meses subsequentes.
 - Cada cartão tem dia de vencimento; o fechamento é automático em 5 dias antes do vencimento (ex.: vencimento dia 10, compras até dia 05 entram na próxima fatura dia 10; após isso, vão para a fatura do mês seguinte).
 - Tela de extrato consolidando movimentações e faturas.
+- Filtros no extrato por mês, tipo (despesa/receita) e categoria.
+- Seletor de mês no dashboard para análise mensal dos indicadores.
 - Cadastro de bancos e cartões de crédito.
 - Sistema de faturas por cartão com ação "Marcar paga" que desconta automaticamente do saldo do banco, sem necessidade de cadastro manual de fatura.
 - Botão de ajuste manual de saldo por banco, registrando o ajuste no extrato.

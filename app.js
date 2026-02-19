@@ -11,7 +11,13 @@ const defaultState = {
     { id: crypto.randomUUID(), name: 'Salário', type: 'income' }
   ],
   transactions: [],
-  balanceAdjustments: []
+  balanceAdjustments: [],
+  filters: {
+    dashboardMonth: 'all',
+    statementMonth: 'all',
+    statementType: 'all',
+    statementCategory: 'all'
+  }
 };
 
 let state = loadState();
@@ -40,6 +46,13 @@ function loadState() {
       cardId: '',
       ...t
     }));
+    parsed.filters = {
+      dashboardMonth: 'all',
+      statementMonth: 'all',
+      statementType: 'all',
+      statementCategory: 'all',
+      ...(parsed.filters || {})
+    };
     return parsed;
   } catch {
     return structuredClone(defaultState);
@@ -89,25 +102,45 @@ function recalculateBankBalances() {
   }
 }
 
-function totals() {
+function matchesMonth(dateValue, monthFilter) {
+  return monthFilter === 'all' || (dateValue || '').startsWith(monthFilter);
+}
+
+function getAvailableMonths() {
+  const months = new Set();
+  state.transactions.forEach((t) => months.add((t.date || '').slice(0, 7)));
+  state.invoices.forEach((i) => months.add((i.dueDate || '').slice(0, 7)));
+  state.balanceAdjustments.forEach((a) => months.add((a.date || '').slice(0, 7)));
+  return [...months].filter(Boolean).sort().reverse();
+}
+
+function monthLabel(month) {
+  if (month === 'all') return 'Todos os meses';
+  const [y, m] = month.split('-');
+  return new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+}
+
+function totals(monthFilter = 'all') {
   const paidIncome = state.transactions
-    .filter((t) => t.type === 'income' && t.status === 'paid')
+    .filter((t) => t.type === 'income' && t.status === 'paid' && matchesMonth(t.date, monthFilter))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const paidExpense = state.transactions
-    .filter((t) => t.type === 'expense' && t.status === 'paid' && t.paymentMethod !== 'credit_card')
+    .filter((t) => t.type === 'expense' && t.status === 'paid' && t.paymentMethod !== 'credit_card' && matchesMonth(t.date, monthFilter))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const pendingIncome = state.transactions
-    .filter((t) => t.type === 'income' && t.status === 'pending')
+    .filter((t) => t.type === 'income' && t.status === 'pending' && matchesMonth(t.date, monthFilter))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const pendingExpense = state.transactions
-    .filter((t) => t.type === 'expense' && t.status === 'pending' && t.paymentMethod !== 'credit_card')
+    .filter((t) => t.type === 'expense' && t.status === 'pending' && t.paymentMethod !== 'credit_card' && matchesMonth(t.date, monthFilter))
     .reduce((sum, t) => sum + t.amount, 0);
 
   const bankBalance = state.banks.reduce((sum, b) => sum + b.balance, 0);
-  const unpaidInvoices = state.invoices.filter((inv) => !inv.paid).reduce((sum, inv) => sum + inv.amount, 0);
+  const unpaidInvoices = state.invoices
+    .filter((inv) => !inv.paid && matchesMonth(inv.dueDate, monthFilter))
+    .reduce((sum, inv) => sum + inv.amount, 0);
 
   return {
     paidIncome,
@@ -145,8 +178,18 @@ function optionHTML(items, mapFn) {
 }
 
 function renderDashboard() {
-  const t = totals();
+  const monthFilter = state.filters.dashboardMonth;
+  const t = totals(monthFilter);
+  const monthOptions = ['all', ...getAvailableMonths()]
+    .map((month) => `<option value="${month}">${monthLabel(month)}</option>`)
+    .join('');
+
   document.getElementById('dashboard').innerHTML = `
+    <div class="card" style="margin-bottom:1rem;">
+      <label>Mês do dashboard
+        <select id="dashboard-month-filter">${monthOptions}</select>
+      </label>
+    </div>
     <div class="metric-grid">
       <article class="metric"><span>Saldo atual</span><strong>${fmtMoney(t.bankBalance)}</strong></article>
       <article class="metric"><span>Receitas pagas</span><strong>${fmtMoney(t.paidIncome)}</strong></article>
@@ -178,6 +221,14 @@ function renderDashboard() {
       </section>
     </div>
   `;
+
+  const dashboardMonthFilter = document.getElementById('dashboard-month-filter');
+  dashboardMonthFilter.value = monthFilter;
+  dashboardMonthFilter.onchange = (event) => {
+    state.filters.dashboardMonth = event.target.value;
+    saveState();
+    render();
+  };
 
   renderFlowChart();
   renderExpenseChart();
@@ -487,6 +538,38 @@ function renderTransactions() {
 
 function renderStatement() {
   const list = document.getElementById('statement-list');
+  const monthSelect = document.getElementById('statement-filter-month');
+  const typeSelect = document.getElementById('statement-filter-type');
+  const categorySelect = document.getElementById('statement-filter-category');
+
+  const monthOptions = ['all', ...getAvailableMonths()]
+    .map((month) => `<option value="${month}">${monthLabel(month)}</option>`)
+    .join('');
+  monthSelect.innerHTML = monthOptions;
+  categorySelect.innerHTML = `<option value="all">Todas as categorias</option>${state.categories
+    .map((c) => `<option value="${c.id}">${c.name}</option>`)
+    .join('')}`;
+
+  monthSelect.value = state.filters.statementMonth;
+  typeSelect.value = state.filters.statementType;
+  categorySelect.value = state.filters.statementCategory;
+
+  monthSelect.onchange = (event) => {
+    state.filters.statementMonth = event.target.value;
+    saveState();
+    renderStatement();
+  };
+  typeSelect.onchange = (event) => {
+    state.filters.statementType = event.target.value;
+    saveState();
+    renderStatement();
+  };
+  categorySelect.onchange = (event) => {
+    state.filters.statementCategory = event.target.value;
+    saveState();
+    renderStatement();
+  };
+
   const entries = [
     ...state.transactions.map((t) => ({
       id: `t-${t.id}`,
@@ -497,7 +580,9 @@ function renderStatement() {
       value: t.type === 'expense' ? -t.amount : t.amount,
       status: getStatementStatus(t),
       canToggleStatus: t.paymentMethod !== 'credit_card',
-      toggleLabel: t.status === 'paid' ? 'Marcar como pendente' : 'Marcar como pago/recebido'
+      toggleLabel: t.status === 'paid' ? 'Marcar como pendente' : 'Marcar como pago/recebido',
+      type: t.type,
+      categoryId: t.categoryId
     })),
     ...state.invoices.map((i) => ({
       id: `i-${i.id}`,
@@ -506,7 +591,9 @@ function renderStatement() {
       text: `Fatura ${getCardName(i.cardId)}${i.items?.length ? ` • ${i.items.length} compra(s)` : ''}`,
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
-      canToggleStatus: false
+      canToggleStatus: false,
+      type: 'expense',
+      categoryId: 'all'
     })),
     ...state.balanceAdjustments.map((a) => ({
       id: `a-${a.id}`,
@@ -515,9 +602,15 @@ function renderStatement() {
       text: `${a.description} • ${getBankName(a.bankId)}`,
       value: a.amount,
       status: 'Ajuste de saldo',
-      canToggleStatus: false
+      canToggleStatus: false,
+      type: a.amount >= 0 ? 'income' : 'expense',
+      categoryId: 'all'
     }))
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter((e) => matchesMonth(e.date, state.filters.statementMonth))
+    .filter((e) => state.filters.statementType === 'all' || e.type === state.filters.statementType)
+    .filter((e) => state.filters.statementCategory === 'all' || e.categoryId === state.filters.statementCategory);
 
   if (!entries.length) {
     list.innerHTML = '<p class="muted">Extrato vazio.</p>';
