@@ -2,7 +2,7 @@ const STORAGE_KEY = 'lc-bank-data-v1';
 
 const defaultState = {
   theme: 'dark',
-  banks: [{ id: crypto.randomUUID(), name: 'Banco Principal', balance: 4500 }],
+  banks: [{ id: crypto.randomUUID(), name: 'Banco Principal', openingBalance: 4500, balance: 4500 }],
   cards: [],
   invoices: [],
   categories: [
@@ -20,6 +20,11 @@ function loadState() {
   if (!raw) return structuredClone(defaultState);
   try {
     const parsed = { ...structuredClone(defaultState), ...JSON.parse(raw) };
+    parsed.banks = (parsed.banks || []).map((bank) => ({
+      ...bank,
+      openingBalance: typeof bank.openingBalance === 'number' ? bank.openingBalance : (Number(bank.balance) || 0),
+      balance: Number(bank.balance) || 0
+    }));
     parsed.cards = (parsed.cards || []).map((card) => ({ ...card, dueDay: card.dueDay || 10 }));
     parsed.transactions = (parsed.transactions || []).map((t) => ({
       paymentMethod: 'bank',
@@ -41,6 +46,34 @@ const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' 
 
 function fmtMoney(v) {
   return BRL.format(Number(v) || 0);
+}
+
+function recalculateBankBalances() {
+  state.banks = state.banks.map((bank) => ({
+    ...bank,
+    openingBalance: typeof bank.openingBalance === 'number' ? bank.openingBalance : (Number(bank.balance) || 0)
+  }));
+
+  const cardBankMap = Object.fromEntries(state.cards.map((card) => [card.id, card.bankId]));
+
+  for (const bank of state.banks) {
+    let nextBalance = Number(bank.openingBalance) || 0;
+
+    for (const t of state.transactions) {
+      if (t.bankId !== bank.id) continue;
+      if (t.status !== 'paid') continue;
+      if (t.paymentMethod === 'credit_card') continue;
+      nextBalance += t.type === 'income' ? t.amount : -t.amount;
+    }
+
+    for (const inv of state.invoices) {
+      if (!inv.paid) continue;
+      if (cardBankMap[inv.cardId] !== bank.id) continue;
+      nextBalance -= inv.amount;
+    }
+
+    bank.balance = Number(nextBalance.toFixed(2));
+  }
 }
 
 function totals() {
@@ -610,23 +643,11 @@ function removeCategory(id) {
 function markInvoicePaid(id) {
   const invoice = state.invoices.find((x) => x.id === id);
   if (!invoice || invoice.paid) return;
-  const card = state.cards.find((c) => c.id === invoice.cardId);
-  if (!card) return;
-  const bank = state.banks.find((b) => b.id === card.bankId);
-  if (!bank) return;
-
-  bank.balance -= invoice.amount;
   invoice.paid = true;
 }
 
-function applyTransactionOnBank(transaction, operation) {
-  if (transaction.paymentMethod === 'credit_card') return;
-
-  const bank = state.banks.find((b) => b.id === transaction.bankId);
-  if (!bank) return;
-
-  const signedAmount = transaction.type === 'income' ? transaction.amount : -transaction.amount;
-  bank.balance += operation === 'add' ? signedAmount : -signedAmount;
+function applyTransactionOnBank() {
+  // saldo é recalculado no render com base no histórico
 }
 
 function toggleTransactionStatus(id) {
@@ -693,10 +714,6 @@ function bindForms() {
       createInvoicesForCardPurchase(transaction);
     }
 
-    if (status === 'paid') {
-      applyTransactionOnBank(transaction, 'add');
-    }
-
     e.target.reset();
     syncTransactionFormControls();
     saveState();
@@ -714,7 +731,8 @@ function bindForms() {
   document.getElementById('bank-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const data = new FormData(e.target);
-    state.banks.push({ id: crypto.randomUUID(), name: data.get('name').trim(), balance: Number(data.get('balance')) });
+    const initialBalance = Number(data.get('balance'));
+    state.banks.push({ id: crypto.randomUUID(), name: data.get('name').trim(), openingBalance: initialBalance, balance: initialBalance });
     e.target.reset();
     saveState();
     render();
@@ -746,6 +764,7 @@ function bindForms() {
 }
 
 function render() {
+  recalculateBankBalances();
   updateTheme();
   renderDashboard();
   renderSelects();
