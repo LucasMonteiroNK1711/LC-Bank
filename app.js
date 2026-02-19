@@ -49,7 +49,7 @@ function totals() {
     .reduce((sum, t) => sum + t.amount, 0);
 
   const paidExpense = state.transactions
-    .filter((t) => t.type === 'expense' && t.status === 'paid')
+    .filter((t) => t.type === 'expense' && t.status === 'paid' && t.paymentMethod !== 'credit_card')
     .reduce((sum, t) => sum + t.amount, 0);
 
   const pendingIncome = state.transactions
@@ -57,7 +57,7 @@ function totals() {
     .reduce((sum, t) => sum + t.amount, 0);
 
   const pendingExpense = state.transactions
-    .filter((t) => t.type === 'expense' && t.status === 'pending')
+    .filter((t) => t.type === 'expense' && t.status === 'pending' && t.paymentMethod !== 'credit_card')
     .reduce((sum, t) => sum + t.amount, 0);
 
   const bankBalance = state.banks.reduce((sum, b) => sum + b.balance, 0);
@@ -159,6 +159,14 @@ function getCategoryName(id) {
 
 function getBankName(id) {
   return state.banks.find((b) => b.id === id)?.name ?? 'Sem banco';
+}
+
+function getStatementStatus(transaction) {
+  if (transaction.paymentMethod === 'credit_card') {
+    return 'Lançado no cartão';
+  }
+
+  return transaction.status === 'paid' ? 'Compensado' : 'Previsto';
 }
 
 function getPaymentLabel(transaction) {
@@ -263,11 +271,19 @@ function syncTransactionFormControls() {
   const installmentsWrapper = document.getElementById('transaction-installments-wrapper');
   const cardSelect = document.getElementById('transaction-card');
   const installmentsInput = document.getElementById('transaction-installments');
+  const statusSelect = form.querySelector('select[name="status"]');
 
   const enableCreditCard = type === 'expense' && paymentMethod === 'credit_card';
   cardWrapper.classList.toggle('hidden', !enableCreditCard);
   installmentsWrapper.classList.toggle('hidden', !enableCreditCard);
   cardSelect.required = enableCreditCard;
+  statusSelect.disabled = enableCreditCard;
+
+  if (enableCreditCard) {
+    statusSelect.value = 'pending';
+  } else {
+    statusSelect.disabled = false;
+  }
 
   if (!enableCreditCard) {
     installmentsInput.value = '1';
@@ -433,8 +449,8 @@ function renderStatement() {
       date: t.date,
       text: `${t.type === 'expense' ? 'Despesa' : 'Receita'}: ${t.description} (${getPaymentLabel(t)})`,
       value: t.type === 'expense' ? -t.amount : t.amount,
-      status: t.status === 'paid' ? 'Compensado' : 'Previsto',
-      canToggleStatus: true,
+      status: getStatementStatus(t),
+      canToggleStatus: t.paymentMethod !== 'credit_card',
       toggleLabel: t.status === 'paid' ? 'Marcar como pendente' : 'Marcar como pago/recebido'
     })),
     ...state.invoices.map((i) => ({
@@ -651,10 +667,11 @@ function bindForms() {
     const amount = Number(data.get('amount'));
     const type = data.get('type');
     const bankId = data.get('bank');
-    const status = data.get('status');
+    const rawStatus = data.get('status');
     const paymentMethod = data.get('paymentMethod');
     const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
     const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
+    const status = isCreditCardPurchase ? 'pending' : rawStatus;
 
     const transaction = {
       id: crypto.randomUUID(),
