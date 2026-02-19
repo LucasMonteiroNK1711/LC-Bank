@@ -10,7 +10,8 @@ const defaultState = {
     { id: crypto.randomUUID(), name: 'Alimentação', type: 'expense' },
     { id: crypto.randomUUID(), name: 'Salário', type: 'income' }
   ],
-  transactions: []
+  transactions: [],
+  balanceAdjustments: []
 };
 
 let state = loadState();
@@ -26,6 +27,13 @@ function loadState() {
       balance: Number(bank.balance) || 0
     }));
     parsed.cards = (parsed.cards || []).map((card) => ({ ...card, dueDay: card.dueDay || 10 }));
+    parsed.balanceAdjustments = (parsed.balanceAdjustments || []).map((a) => ({
+      id: a.id || crypto.randomUUID(),
+      bankId: a.bankId || '',
+      amount: Number(a.amount) || 0,
+      date: a.date || new Date().toISOString().slice(0, 10),
+      description: a.description || 'Ajuste manual de saldo'
+    }));
     parsed.transactions = (parsed.transactions || []).map((t) => ({
       paymentMethod: 'bank',
       installments: 1,
@@ -70,6 +78,11 @@ function recalculateBankBalances() {
       if (!inv.paid) continue;
       if (cardBankMap[inv.cardId] !== bank.id) continue;
       nextBalance -= inv.amount;
+    }
+
+    for (const adj of state.balanceAdjustments) {
+      if (adj.bankId !== bank.id) continue;
+      nextBalance += adj.amount;
     }
 
     bank.balance = Number(nextBalance.toFixed(2));
@@ -494,6 +507,15 @@ function renderStatement() {
       value: -i.amount,
       status: i.paid ? 'Paga' : 'Em aberto',
       canToggleStatus: false
+    })),
+    ...state.balanceAdjustments.map((a) => ({
+      id: `a-${a.id}`,
+      entryType: 'adjustment',
+      date: a.date,
+      text: `${a.description} • ${getBankName(a.bankId)}`,
+      value: a.amount,
+      status: 'Ajuste de saldo',
+      canToggleStatus: false
     }))
   ].sort((a, b) => b.date.localeCompare(a.date));
 
@@ -537,7 +559,10 @@ function renderBanksAndCards() {
           <strong>${b.name}</strong>
           <div class="meta">Saldo: ${fmtMoney(b.balance)}</div>
         </div>
-        <button class="danger small" data-action="remove-bank" data-id="${b.id}">Remover</button>
+        <div class="list-actions">
+          <button class="secondary small" data-action="adjust-bank-balance" data-id="${b.id}">Ajustar saldo</button>
+          <button class="danger small" data-action="remove-bank" data-id="${b.id}">Remover</button>
+        </div>
       </article>`
     )
     .join('');
@@ -621,12 +646,35 @@ function removeTransaction(id) {
     .filter((inv) => !inv.items || inv.items.length || inv.amount > 0);
 }
 
+function addBankBalanceAdjustment(bankId) {
+  const bank = state.banks.find((b) => b.id === bankId);
+  if (!bank) return;
+
+  const amountRaw = prompt(`Ajuste de saldo para ${bank.name}.
+Use valor positivo para somar e negativo para subtrair.`, '0');
+  if (amountRaw === null) return;
+
+  const amount = Number(String(amountRaw).replace(',', '.'));
+  if (!Number.isFinite(amount) || amount === 0) return;
+
+  const description = prompt('Descrição do ajuste (opcional):', 'Ajuste manual de saldo') || 'Ajuste manual de saldo';
+
+  state.balanceAdjustments.push({
+    id: crypto.randomUUID(),
+    bankId,
+    amount,
+    date: new Date().toISOString().slice(0, 10),
+    description: description.trim() || 'Ajuste manual de saldo'
+  });
+}
+
 function removeBank(id) {
   state.transactions = state.transactions.filter((t) => t.bankId !== id);
   const cardsToRemove = state.cards.filter((c) => c.bankId === id).map((c) => c.id);
   state.cards = state.cards.filter((c) => c.bankId !== id);
   state.invoices = state.invoices.filter((inv) => !cardsToRemove.includes(inv.cardId));
   state.banks = state.banks.filter((b) => b.id !== id);
+  state.balanceAdjustments = state.balanceAdjustments.filter((a) => a.bankId !== id);
 }
 
 function removeCard(id) {
@@ -671,6 +719,7 @@ document.body.addEventListener('click', (event) => {
 
   if (action === 'remove-transaction') removeTransaction(id);
   if (action === 'remove-bank') removeBank(id);
+  if (action === 'adjust-bank-balance') addBankBalanceAdjustment(id);
   if (action === 'remove-card') removeCard(id);
   if (action === 'remove-invoice') state.invoices = state.invoices.filter((i) => i.id !== id);
   if (action === 'remove-category') removeCategory(id);
