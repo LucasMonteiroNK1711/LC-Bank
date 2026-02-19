@@ -139,6 +139,19 @@ button.success { background: var(--success); }
 .mt { margin-top: 1.4rem; }
 .hidden { display: none; }
 
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  margin-top: .75rem;
+}
+
+button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+
+
 .chart-canvas {
   width: 100%;
   height: auto;

@@ -1,4 +1,15 @@
 const STORAGE_KEY = 'lc-bank-data-v1';
+const CLOUD_CONFIG_KEY = 'lc-bank-cloud-config-v1';
+
+const cloud = {
+  app: null,
+  auth: null,
+  db: null,
+  user: null,
+  initialized: false,
+  saveTimer: null,
+  status: 'Local apenas'
+};
 
 const defaultState = {
   theme: 'dark',
@@ -22,38 +33,42 @@ const defaultState = {
 
 let state = loadState();
 
+function normalizeState(inputState = {}) {
+  const parsed = { ...structuredClone(defaultState), ...(inputState || {}) };
+  parsed.banks = (parsed.banks || []).map((bank) => ({
+    ...bank,
+    openingBalance: typeof bank.openingBalance === 'number' ? bank.openingBalance : (Number(bank.balance) || 0),
+    balance: Number(bank.balance) || 0
+  }));
+  parsed.cards = (parsed.cards || []).map((card) => ({ ...card, dueDay: card.dueDay || 10 }));
+  parsed.balanceAdjustments = (parsed.balanceAdjustments || []).map((a) => ({
+    id: a.id || crypto.randomUUID(),
+    bankId: a.bankId || '',
+    amount: Number(a.amount) || 0,
+    date: a.date || new Date().toISOString().slice(0, 10),
+    description: a.description || 'Ajuste manual de saldo'
+  }));
+  parsed.transactions = (parsed.transactions || []).map((t) => ({
+    paymentMethod: 'bank',
+    installments: 1,
+    cardId: '',
+    ...t
+  }));
+  parsed.filters = {
+    dashboardMonth: 'all',
+    statementMonth: 'all',
+    statementType: 'all',
+    statementCategory: 'all',
+    ...(parsed.filters || {})
+  };
+  return parsed;
+}
+
 function loadState() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return structuredClone(defaultState);
   try {
-    const parsed = { ...structuredClone(defaultState), ...JSON.parse(raw) };
-    parsed.banks = (parsed.banks || []).map((bank) => ({
-      ...bank,
-      openingBalance: typeof bank.openingBalance === 'number' ? bank.openingBalance : (Number(bank.balance) || 0),
-      balance: Number(bank.balance) || 0
-    }));
-    parsed.cards = (parsed.cards || []).map((card) => ({ ...card, dueDay: card.dueDay || 10 }));
-    parsed.balanceAdjustments = (parsed.balanceAdjustments || []).map((a) => ({
-      id: a.id || crypto.randomUUID(),
-      bankId: a.bankId || '',
-      amount: Number(a.amount) || 0,
-      date: a.date || new Date().toISOString().slice(0, 10),
-      description: a.description || 'Ajuste manual de saldo'
-    }));
-    parsed.transactions = (parsed.transactions || []).map((t) => ({
-      paymentMethod: 'bank',
-      installments: 1,
-      cardId: '',
-      ...t
-    }));
-    parsed.filters = {
-      dashboardMonth: 'all',
-      statementMonth: 'all',
-      statementType: 'all',
-      statementCategory: 'all',
-      ...(parsed.filters || {})
-    };
-    return parsed;
+    return normalizeState(JSON.parse(raw));
   } catch {
     return structuredClone(defaultState);
   }
@@ -61,6 +76,136 @@ function loadState() {
 
 function saveState() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  queueCloudSave();
+}
+
+function queueCloudSave() {
+  if (!cloud.db || !cloud.user) return;
+  if (cloud.saveTimer) clearTimeout(cloud.saveTimer);
+  cloud.saveTimer = setTimeout(async () => {
+    try {
+      await cloud.db.collection('users').doc(cloud.user.uid).set({
+        state,
+        updatedAt: new Date().toISOString(),
+        email: cloud.user.email || ''
+      });
+      cloud.status = `Sincronizado (${new Date().toLocaleTimeString('pt-BR')})`;
+    } catch (error) {
+      cloud.status = `Erro ao sincronizar: ${error.message}`;
+    }
+    renderCloudStatus();
+  }, 600);
+}
+
+async function loadCloudState() {
+  if (!cloud.db || !cloud.user) return;
+  try {
+    const doc = await cloud.db.collection('users').doc(cloud.user.uid).get();
+    if (doc.exists && doc.data().state) {
+      state = normalizeState(doc.data().state);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      cloud.status = 'Dados carregados da nuvem';
+      render();
+      return;
+    }
+    cloud.status = 'Conta conectada (sem dados remotos ainda)';
+    queueCloudSave();
+  } catch (error) {
+    cloud.status = `Erro ao carregar nuvem: ${error.message}`;
+  }
+  renderCloudStatus();
+}
+
+function renderCloudStatus() {
+  const statusEl = document.getElementById('cloud-status-text');
+  const userEl = document.getElementById('cloud-user-text');
+  const connectBtn = document.getElementById('cloud-connect-btn');
+  const disconnectBtn = document.getElementById('cloud-disconnect-btn');
+  const syncBtn = document.getElementById('cloud-sync-btn');
+  if (!statusEl || !userEl || !connectBtn || !disconnectBtn || !syncBtn) return;
+
+  userEl.textContent = cloud.user ? `Conectado: ${cloud.user.email || cloud.user.displayName || 'usuário'}` : 'Não conectado';
+  statusEl.textContent = cloud.status;
+  connectBtn.classList.toggle('hidden', Boolean(cloud.user));
+  disconnectBtn.classList.toggle('hidden', !cloud.user);
+  syncBtn.disabled = !cloud.user;
+}
+
+async function initCloud() {
+  if (cloud.initialized) return;
+  if (!window.firebase) {
+    cloud.status = 'SDK de nuvem indisponível';
+    return;
+  }
+
+  const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
+  if (!raw) {
+    cloud.status = 'Nuvem não configurada';
+    return;
+  }
+
+  try {
+    const config = JSON.parse(raw);
+    cloud.app = firebase.apps.length ? firebase.app() : firebase.initializeApp(config);
+    cloud.auth = firebase.auth();
+    cloud.db = firebase.firestore();
+    cloud.initialized = true;
+
+    cloud.auth.onAuthStateChanged(async (user) => {
+      cloud.user = user;
+      if (user) {
+        cloud.status = 'Conectado. Carregando dados...';
+        renderCloudStatus();
+        await loadCloudState();
+      } else {
+        cloud.status = 'Nuvem configurada. Faça login para sincronizar';
+        renderCloudStatus();
+      }
+    });
+  } catch (error) {
+    cloud.status = `Configuração inválida: ${error.message}`;
+  }
+}
+
+async function connectCloud() {
+  if (!localStorage.getItem(CLOUD_CONFIG_KEY)) {
+    const configInput = window.prompt(
+      'Cole o JSON da configuração Web do Firebase (Project settings > Your apps > SDK setup and configuration):'
+    );
+    if (!configInput) return;
+    try {
+      JSON.parse(configInput);
+    } catch {
+      window.alert('JSON inválido.');
+      return;
+    }
+    localStorage.setItem(CLOUD_CONFIG_KEY, configInput);
+  }
+
+  await initCloud();
+  if (!cloud.auth) return;
+
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await cloud.auth.signInWithPopup(provider);
+  } catch (error) {
+    cloud.status = `Falha no login: ${error.message}`;
+    renderCloudStatus();
+  }
+}
+
+async function disconnectCloud() {
+  if (!cloud.auth) return;
+  await cloud.auth.signOut();
+  cloud.status = 'Desconectado da nuvem';
+  renderCloudStatus();
+}
+
+function forceCloudSync() {
+  if (!cloud.user) return;
+  cloud.status = 'Sincronizando...';
+  renderCloudStatus();
+  queueCloudSave();
 }
 
 const BRL = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -190,6 +335,16 @@ function renderDashboard() {
         <select id="dashboard-month-filter">${monthOptions}</select>
       </label>
     </div>
+    <div class="card" style="margin-bottom:1rem;">
+      <h3>Sincronização entre dispositivos</h3>
+      <p id="cloud-user-text" class="muted">Não conectado</p>
+      <p id="cloud-status-text" class="muted">Local apenas</p>
+      <div class="row-actions">
+        <button id="cloud-connect-btn" class="secondary small">Conectar nuvem</button>
+        <button id="cloud-sync-btn" class="secondary small">Sincronizar agora</button>
+        <button id="cloud-disconnect-btn" class="danger small hidden">Desconectar</button>
+      </div>
+    </div>
     <div class="metric-grid">
       <article class="metric"><span>Saldo atual</span><strong>${fmtMoney(t.bankBalance)}</strong></article>
       <article class="metric"><span>Receitas pagas</span><strong>${fmtMoney(t.paidIncome)}</strong></article>
@@ -229,6 +384,11 @@ function renderDashboard() {
     saveState();
     render();
   };
+
+  document.getElementById('cloud-connect-btn').onclick = () => connectCloud();
+  document.getElementById('cloud-disconnect-btn').onclick = () => disconnectCloud();
+  document.getElementById('cloud-sync-btn').onclick = () => forceCloudSync();
+  renderCloudStatus();
 
   renderFlowChart(monthFilter);
   renderExpenseChart(monthFilter);
@@ -934,3 +1094,4 @@ bindForms();
 initThemeToggle();
 syncTransactionFormControls();
 render();
+initCloud().then(() => renderCloudStatus());

@@ -17,7 +17,7 @@ Aplicação web responsiva para controle de finanças pessoais com foco em UX de
 - Botão de ajuste manual de saldo por banco, registrando o ajuste no extrato.
 - Cadastro e remoção de categorias.
 - Tema dark/light.
-- Persistência local com `localStorage`.
+- Persistência local com `localStorage` e opção de sincronização em nuvem (Firebase Firestore + login Google) para acessar os dados em múltiplos dispositivos.
 
 ## Como executar
 
@@ -28,3 +28,13 @@ python3 -m http.server 4173
 ```
 
 Depois acesse `http://localhost:4173`.
+
+## Sincronização em nuvem (multi-dispositivo)
+
+1. Crie um projeto no [Firebase Console](https://console.firebase.google.com/).
+2. Ative **Authentication > Google** e **Firestore Database**.
+3. Em **Project settings > Your apps > Web app**, copie o objeto de configuração JSON.
+4. No Dashboard do LC Bank, clique em **Conectar nuvem** e cole esse JSON.
+5. Faça login com sua conta Google.
+
+Após conectar, os dados passam a sincronizar automaticamente com o Firestore e você pode abrir o app no celular/tablet/computador usando a mesma conta.
