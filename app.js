@@ -230,8 +230,8 @@ function renderDashboard() {
     render();
   };
 
-  renderFlowChart();
-  renderExpenseChart();
+  renderFlowChart(monthFilter);
+  renderExpenseChart(monthFilter);
 }
 
 function renderSelects() {
@@ -387,13 +387,18 @@ function syncTransactionFormControls() {
   }
 }
 
-function getMonthlyFlow() {
+function getMonthlyFlow(monthFilter = 'all') {
   const months = [];
-  const current = new Date();
-  for (let i = 5; i >= 0; i -= 1) {
-    const d = new Date(current.getFullYear(), current.getMonth() - i, 1);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    months.push({ key, label: d.toLocaleDateString('pt-BR', { month: 'short' }) });
+
+  if (monthFilter === 'all') {
+    const current = new Date();
+    for (let i = 5; i >= 0; i -= 1) {
+      const d = new Date(current.getFullYear(), current.getMonth() - i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      months.push({ key, label: d.toLocaleDateString('pt-BR', { month: 'short' }) });
+    }
+  } else {
+    months.push({ key: monthFilter, label: monthLabel(monthFilter) });
   }
 
   return months.map((month) => {
@@ -404,7 +409,7 @@ function getMonthlyFlow() {
   });
 }
 
-function renderFlowChart() {
+function renderFlowChart(monthFilter = 'all') {
   const canvas = document.getElementById('flow-chart');
   if (!canvas) return;
 
@@ -414,7 +419,7 @@ function renderFlowChart() {
   const pad = 35;
   ctx.clearRect(0, 0, w, h);
 
-  const data = getMonthlyFlow();
+  const data = getMonthlyFlow(monthFilter);
   const maxValue = Math.max(1, ...data.flatMap((m) => [m.income, m.expense]));
   const slotWidth = (w - pad * 2) / data.length;
   const barWidth = slotWidth * 0.32;
@@ -452,7 +457,7 @@ function renderFlowChart() {
   ctx.fillRect(pad + 138, 8, 10, 10);
 }
 
-function renderExpenseChart() {
+function renderExpenseChart(monthFilter = 'all') {
   const canvas = document.getElementById('expense-chart');
   if (!canvas) return;
 
@@ -461,7 +466,7 @@ function renderExpenseChart() {
   const h = canvas.height;
   ctx.clearRect(0, 0, w, h);
 
-  const expenses = state.transactions.filter((t) => t.type === 'expense');
+  const expenses = state.transactions.filter((t) => t.type === 'expense' && matchesMonth(t.date, monthFilter));
   const grouped = expenses.reduce((acc, t) => {
     const name = getCategoryName(t.categoryId);
     acc[name] = (acc[name] || 0) + t.amount;
