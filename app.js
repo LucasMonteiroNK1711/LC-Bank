@@ -905,24 +905,34 @@ function removeTransaction(id) {
 }
 
 function addBankBalanceAdjustment(bankId) {
+  recalculateBankBalances();
   const bank = state.banks.find((b) => b.id === bankId);
   if (!bank) return;
 
-  const amountRaw = prompt(`Ajuste de saldo para ${bank.name}.
-Use valor positivo para somar e negativo para subtrair.`, '0');
-  if (amountRaw === null) return;
+  const currentBalance = Number(bank.balance) || 0;
+  const targetBalanceRaw = prompt(
+    `Novo saldo para ${bank.name}.
+Saldo atual: ${fmtMoney(currentBalance)}`,
+    String(currentBalance.toFixed(2)).replace('.', ',')
+  );
+  if (targetBalanceRaw === null) return;
 
-  const amount = Number(String(amountRaw).replace(',', '.'));
-  if (!Number.isFinite(amount) || amount === 0) return;
+  const targetBalance = Number(String(targetBalanceRaw).replace(',', '.'));
+  if (!Number.isFinite(targetBalance)) return;
 
-  const description = prompt('Descrição do ajuste (opcional):', 'Ajuste manual de saldo') || 'Ajuste manual de saldo';
+  const amount = Number((targetBalance - currentBalance).toFixed(2));
+  if (amount === 0) return;
+
+  const description =
+    prompt('Descrição do ajuste (opcional):', `Ajuste de saldo para ${fmtMoney(targetBalance)}`) ||
+    `Ajuste de saldo para ${fmtMoney(targetBalance)}`;
 
   state.balanceAdjustments.push({
     id: crypto.randomUUID(),
     bankId,
     amount,
     date: new Date().toISOString().slice(0, 10),
-    description: description.trim() || 'Ajuste manual de saldo'
+    description: description.trim() || `Ajuste de saldo para ${fmtMoney(targetBalance)}`
   });
 }
 

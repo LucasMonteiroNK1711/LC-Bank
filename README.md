@@ -14,7 +14,7 @@ Aplicação web responsiva para controle de finanças pessoais com foco em UX de
 - Seletor de mês no dashboard para análise mensal dos indicadores.
 - Cadastro de bancos e cartões de crédito.
 - Sistema de faturas por cartão com ação "Marcar paga" que desconta automaticamente do saldo do banco, sem necessidade de cadastro manual de fatura.
-- Botão de ajuste manual de saldo por banco, registrando o ajuste no extrato.
+- Botão de ajuste de saldo por banco informando o novo saldo desejado; o sistema calcula automaticamente a diferença e registra no extrato.
 - Cadastro e remoção de categorias.
 - Tema dark/light.
 - Persistência local com `localStorage` e opção de sincronização em nuvem (Firebase Firestore + login Google) para acessar os dados em múltiplos dispositivos.
