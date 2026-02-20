@@ -38,3 +38,25 @@ Depois acesse `http://localhost:4173`.
 5. Faça login com sua conta Google.
 
 Após conectar, os dados passam a sincronizar automaticamente com o Firestore e você pode abrir o app no celular/tablet/computador usando a mesma conta.
+
+
+## Publicação do projeto (GitHub Pages)
+
+Este repositório já inclui workflow para deploy automático em **GitHub Pages** (`.github/workflows/deploy-pages.yml`).
+
+### Passo a passo
+
+1. Suba este projeto para um repositório no GitHub.
+2. Em **Settings > Pages**, deixe a origem como **GitHub Actions**.
+3. Faça push para a branch `main` (ou `work`, conforme workflow).
+4. Aguarde o workflow **Deploy LC Bank to GitHub Pages** concluir.
+5. A URL publicada ficará em `https://SEU_USUARIO.github.io/NOME_DO_REPO/`.
+
+### Importante (para login Google/Firebase)
+
+Se você ativar sincronização em nuvem, adicione o domínio do GitHub Pages em:
+
+- **Firebase Authentication > Settings > Authorized domains**
+- e confirme que o mesmo domínio está permitido na configuração do projeto Firebase.
+
+Sem isso, o login Google pode falhar em produção.
