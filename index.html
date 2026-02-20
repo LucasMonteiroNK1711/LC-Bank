@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="pt-BR" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LC Bank | Finanças</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <h1>LC Bank</h1>
+        <nav id="main-nav" class="main-nav">
+          <button data-view="dashboard" class="active">Dashboard</button>
+          <button data-view="extrato">Extrato</button>
+          <button data-view="movimentacoes">Despesas e Receitas</button>
+          <button data-view="bancos">Bancos e Cartões</button>
+          <button data-view="categorias">Categorias</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="topbar">
+          <div>
+            <p class="muted">Gerenciamento financeiro inteligente</p>
+            <h2 id="view-title">Dashboard</h2>
+          </div>
+          <button id="theme-toggle" class="secondary">🌗 Alternar tema</button>
+        </header>
+
+        <section id="dashboard" class="view active"></section>
+
+        <section id="extrato" class="view">
+          <div class="card">
+            <h3>Extrato consolidado</h3>
+            <div class="filters-row">
+              <label>Mês
+                <select id="statement-filter-month"></select>
+              </label>
+              <label>Tipo
+                <select id="statement-filter-type">
+                  <option value="all">Todos</option>
+                  <option value="expense">Despesas</option>
+                  <option value="income">Receitas</option>
+                </select>
+              </label>
+              <label>Categoria
+                <select id="statement-filter-category"></select>
+              </label>
+            </div>
+            <div id="statement-list" class="list"></div>
+          </div>
+        </section>
+
+        <section id="movimentacoes" class="view">
+          <div class="grid-2">
+            <div class="card">
+              <h3>Nova movimentação</h3>
+              <form id="transaction-form" class="stack">
+                <label>Descrição<input required name="description" /></label>
+                <label>Valor (R$)<input required step="0.01" min="0" type="number" name="amount" /></label>
+                <label>Tipo
+                  <select name="type">
+                    <option value="expense">Despesa</option>
+                    <option value="income">Receita</option>
+                  </select>
+                </label>
+                <label>Categoria
+                  <select name="category" id="transaction-category"></select>
+                </label>
+                <label>Banco
+                  <select name="bank" id="transaction-bank"></select>
+                </label>
+                <label>Forma de pagamento
+                  <select name="paymentMethod" id="transaction-payment-method">
+                    <option value="bank">Débito/PIX/Transferência</option>
+                    <option value="credit_card">Cartão de crédito</option>
+                  </select>
+                </label>
+                <label id="transaction-card-wrapper" class="hidden">Cartão de crédito
+                  <select name="cardId" id="transaction-card"></select>
+                </label>
+                <label id="transaction-installments-wrapper" class="hidden">Parcelas
+                  <input type="number" name="installments" id="transaction-installments" min="1" step="1" value="1" />
+                </label>
+                <label>Data<input required type="date" name="date" /></label>
+                <label>Status
+                  <select name="status">
+                    <option value="paid">Pago / Recebido</option>
+                    <option value="pending">Não pago / Não recebido</option>
+                  </select>
+                </label>
+                <button type="submit">Adicionar movimentação</button>
+              </form>
+            </div>
+            <div class="card">
+              <h3>Movimentações</h3>
+              <div id="transactions-list" class="list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="bancos" class="view">
+          <div class="grid-2">
+            <div class="card">
+              <h3>Cadastrar banco</h3>
+              <form id="bank-form" class="stack">
+                <label>Nome do banco<input required name="name" /></label>
+                <label>Saldo inicial (R$)<input type="number" min="0" step="0.01" required name="balance" /></label>
+                <button type="submit">Adicionar banco</button>
+              </form>
+
+              <h3 class="mt">Cadastrar cartão</h3>
+              <form id="card-form" class="stack">
+                <label>Nome do cartão<input required name="name" /></label>
+                <label>Banco
+                  <select name="bank" id="card-bank"></select>
+                </label>
+                <label>Limite (R$)<input type="number" min="0" step="0.01" required name="limit" /></label>
+                <label>Dia do vencimento da fatura<input type="number" min="1" max="28" step="1" required name="dueDay" value="10" /></label>
+                <button type="submit">Adicionar cartão</button>
+              </form>
+            </div>
+
+            <div class="card">
+              <h3>Bancos</h3>
+              <div id="banks-list" class="list"></div>
+              <h3 class="mt">Cartões e faturas</h3>
+              <div id="cards-list" class="list"></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="categorias" class="view">
+          <div class="grid-2">
+            <div class="card">
+              <h3>Cadastro de categorias</h3>
+              <form id="category-form" class="stack">
+                <label>Nome da categoria<input required name="name" /></label>
+                <label>Tipo
+                  <select name="type">
+                    <option value="expense">Despesa</option>
+                    <option value="income">Receita</option>
+                  </select>
+                </label>
+                <button type="submit">Adicionar categoria</button>
+              </form>
+            </div>
+            <div class="card">
+              <h3>Categorias cadastradas</h3>
+              <div id="categories-list" class="list"></div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
