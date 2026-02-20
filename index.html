@@ -161,6 +161,54 @@
       </main>
     </div>
 
+    <div id="edit-transaction-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="edit-transaction-title">
+      <div class="modal-dialog card">
+        <div class="modal-header">
+          <h3 id="edit-transaction-title">Editar movimentação</h3>
+          <button id="edit-transaction-close" class="secondary small" type="button">Fechar</button>
+        </div>
+        <form id="edit-transaction-form" class="stack">
+          <label>Descrição<input required name="description" /></label>
+          <label>Valor (R$)<input required step="0.01" min="0" type="number" name="amount" /></label>
+          <label>Tipo
+            <select name="type">
+              <option value="expense">Despesa</option>
+              <option value="income">Receita</option>
+            </select>
+          </label>
+          <label>Categoria
+            <select name="category" id="edit-transaction-category"></select>
+          </label>
+          <label>Banco
+            <select name="bank" id="edit-transaction-bank"></select>
+          </label>
+          <label>Forma de pagamento
+            <select name="paymentMethod" id="edit-transaction-payment-method">
+              <option value="bank">Débito/PIX/Transferência</option>
+              <option value="credit_card">Cartão de crédito</option>
+            </select>
+          </label>
+          <label id="edit-transaction-card-wrapper" class="hidden">Cartão de crédito
+            <select name="cardId" id="edit-transaction-card"></select>
+          </label>
+          <label id="edit-transaction-installments-wrapper" class="hidden">Parcelas
+            <input type="number" name="installments" id="edit-transaction-installments" min="1" step="1" value="1" />
+          </label>
+          <label>Data<input required type="date" name="date" /></label>
+          <label>Status
+            <select name="status">
+              <option value="paid">Pago / Recebido</option>
+              <option value="pending">Não pago / Não recebido</option>
+            </select>
+          </label>
+          <div class="row-actions">
+            <button type="submit">Salvar alterações</button>
+            <button type="button" id="edit-transaction-cancel" class="secondary">Cancelar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
     <script src="app.js"></script>
   </body>
 </html>

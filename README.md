@@ -6,6 +6,7 @@ Aplicação web responsiva para controle de finanças pessoais com foco em UX de
 
 - Dashboard inicial com métricas de saldo atual, receitas/despesas pagas e saldo previsto do mês.
 - Cadastro de despesas e receitas com data, categoria, banco e status (pago/pendente).
+- Edição de movimentações por modal (botão **Editar** na lista de movimentações).
 - Opção de forma de pagamento nas movimentações (débito/PIX/transferência ou cartão de crédito).
 - Compras no cartão geram faturas automaticamente e parcelamentos criam lançamentos para os meses subsequentes.
 - Cada cartão tem dia de vencimento; o fechamento é automático em 5 dias antes do vencimento (ex.: vencimento dia 10, compras até dia 05 entram na próxima fatura dia 10; após isso, vão para a fatura do mês seguinte).

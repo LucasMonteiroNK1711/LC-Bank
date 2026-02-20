@@ -233,6 +233,37 @@ button:disabled {
   padding: .2rem;
 }
 
+
+.modal.hidden {
+  display: none;
+}
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 8, 20, 0.58);
+  backdrop-filter: blur(4px);
+}
+
+.modal-dialog {
+  width: min(620px, 100%);
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .75rem;
+  margin-bottom: .5rem;
+}
+
 @media (max-width: 980px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -308,5 +339,13 @@ button:disabled {
   .row-actions {
     display: grid;
     grid-template-columns: 1fr;
+  }
+
+  .modal {
+    padding: .6rem;
+  }
+
+  .modal-dialog {
+    max-height: 94vh;
   }
 }

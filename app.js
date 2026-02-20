@@ -38,6 +38,7 @@ const defaultState = {
 };
 
 let state = loadState();
+let editingTransactionId = null;
 
 function normalizeState(inputState = {}) {
   const parsed = { ...structuredClone(defaultState), ...(inputState || {}) };
@@ -442,19 +443,21 @@ function renderDashboard() {
 }
 
 function renderSelects() {
-  document.getElementById('transaction-category').innerHTML = optionHTML(
+  const categoryOptions = optionHTML(
     state.categories,
     (c) => `<option value="${c.id}">${c.name} (${c.type === 'expense' ? 'Despesa' : 'Receita'})</option>`
   );
+  document.getElementById('transaction-category').innerHTML = categoryOptions;
+  document.getElementById('edit-transaction-category').innerHTML = categoryOptions;
 
   const bankOptions = optionHTML(state.banks, (b) => `<option value="${b.id}">${b.name}</option>`);
   document.getElementById('transaction-bank').innerHTML = bankOptions;
+  document.getElementById('edit-transaction-bank').innerHTML = bankOptions;
   document.getElementById('card-bank').innerHTML = bankOptions;
 
-  document.getElementById('transaction-card').innerHTML = optionHTML(
-    state.cards,
-    (c) => `<option value="${c.id}">${c.name}</option>`
-  );
+  const cardOptions = optionHTML(state.cards, (c) => `<option value="${c.id}">${c.name}</option>`);
+  document.getElementById('transaction-card').innerHTML = cardOptions;
+  document.getElementById('edit-transaction-card').innerHTML = cardOptions;
 }
 
 function getCategoryName(id) {
@@ -592,6 +595,77 @@ function syncTransactionFormControls() {
   if (!enableCreditCard) {
     installmentsInput.value = '1';
   }
+}
+
+function syncEditTransactionFormControls() {
+  const form = document.getElementById('edit-transaction-form');
+  const type = form.querySelector('select[name="type"]').value;
+  const paymentMethodSelect = form.querySelector('select[name="paymentMethod"]');
+  if (type !== 'expense') {
+    paymentMethodSelect.value = 'bank';
+  }
+
+  const paymentMethod = paymentMethodSelect.value;
+  const cardWrapper = document.getElementById('edit-transaction-card-wrapper');
+  const installmentsWrapper = document.getElementById('edit-transaction-installments-wrapper');
+  const cardSelect = document.getElementById('edit-transaction-card');
+  const installmentsInput = document.getElementById('edit-transaction-installments');
+  const statusSelect = form.querySelector('select[name="status"]');
+
+  const enableCreditCard = type === 'expense' && paymentMethod === 'credit_card';
+  cardWrapper.classList.toggle('hidden', !enableCreditCard);
+  installmentsWrapper.classList.toggle('hidden', !enableCreditCard);
+  cardSelect.required = enableCreditCard;
+  statusSelect.disabled = enableCreditCard;
+
+  if (enableCreditCard) {
+    statusSelect.value = 'pending';
+  } else {
+    statusSelect.disabled = false;
+  }
+
+  if (!enableCreditCard) {
+    installmentsInput.value = '1';
+  }
+}
+
+function closeEditTransactionModal() {
+  editingTransactionId = null;
+  document.getElementById('edit-transaction-modal').classList.add('hidden');
+}
+
+function removeInvoiceItemsBySourceTransaction(transactionId) {
+  state.invoices = state.invoices
+    .map((inv) => {
+      if (!inv.items?.length) return inv;
+      const filteredItems = inv.items.filter((item) => item.sourceTransactionId !== transactionId);
+      const newAmount = filteredItems.reduce((sum, item) => sum + (item.amount || 0), 0);
+      return { ...inv, items: filteredItems, amount: Number(newAmount.toFixed(2)) };
+    })
+    .filter((inv) => !inv.items || inv.items.length || inv.amount > 0);
+}
+
+function openEditTransactionModal(id) {
+  const t = state.transactions.find((x) => x.id === id);
+  if (!t) return;
+
+  editingTransactionId = id;
+  renderSelects();
+
+  const form = document.getElementById('edit-transaction-form');
+  form.querySelector('input[name="description"]').value = t.description;
+  form.querySelector('input[name="amount"]').value = t.amount;
+  form.querySelector('select[name="type"]').value = t.type;
+  form.querySelector('select[name="category"]').value = t.categoryId || '';
+  form.querySelector('select[name="bank"]').value = t.bankId;
+  form.querySelector('select[name="paymentMethod"]').value = t.paymentMethod || 'bank';
+  form.querySelector('select[name="cardId"]').value = t.cardId || '';
+  form.querySelector('input[name="installments"]').value = t.installments || 1;
+  form.querySelector('input[name="date"]').value = t.date;
+  form.querySelector('select[name="status"]').value = t.status;
+
+  syncEditTransactionFormControls();
+  document.getElementById('edit-transaction-modal').classList.remove('hidden');
 }
 
 function getMonthlyFlow(monthFilter = 'all') {
@@ -741,6 +815,7 @@ function renderTransactions() {
         </div>
         <div class="list-actions">
           <strong>${fmtMoney(t.amount)}</strong>
+          <button class="secondary small" data-action="edit-transaction" data-id="${t.id}">Editar</button>
           <button class="danger small" data-action="remove-transaction" data-id="${t.id}">Remover</button>
         </div>
       </article>`
@@ -1033,6 +1108,7 @@ document.body.addEventListener('click', (event) => {
   const { action, id } = btn.dataset;
 
   if (action === 'remove-transaction') removeTransaction(id);
+  if (action === 'edit-transaction') openEditTransactionModal(id);
   if (action === 'remove-bank') removeBank(id);
   if (action === 'adjust-bank-balance') addBankBalanceAdjustment(id);
   if (action === 'remove-card') removeCard(id);
@@ -1040,6 +1116,8 @@ document.body.addEventListener('click', (event) => {
   if (action === 'remove-category') removeCategory(id);
   if (action === 'pay-invoice') markInvoicePaid(id);
   if (action === 'toggle-transaction-status') toggleTransactionStatus(id);
+
+  if (action === 'edit-transaction') return;
 
   saveState();
   render();
@@ -1125,6 +1203,60 @@ function bindForms() {
     saveState();
     render();
   });
+
+  const editForm = document.getElementById('edit-transaction-form');
+  document.getElementById('edit-transaction-close').addEventListener('click', closeEditTransactionModal);
+  document.getElementById('edit-transaction-cancel').addEventListener('click', closeEditTransactionModal);
+  document.getElementById('edit-transaction-modal').addEventListener('click', (event) => {
+    if (event.target.id === 'edit-transaction-modal') closeEditTransactionModal();
+  });
+
+  editForm.querySelector('select[name="type"]').addEventListener('change', () => {
+    syncEditTransactionFormControls();
+  });
+
+  document.getElementById('edit-transaction-payment-method').addEventListener('change', () => {
+    syncEditTransactionFormControls();
+  });
+
+  editForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!editingTransactionId) return;
+
+    const current = state.transactions.find((t) => t.id === editingTransactionId);
+    if (!current) return;
+
+    const data = new FormData(editForm);
+    const amount = Number(data.get('amount'));
+    const type = data.get('type');
+    const paymentMethod = data.get('paymentMethod');
+    const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
+    const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
+
+    if (current.paymentMethod === 'credit_card') {
+      removeInvoiceItemsBySourceTransaction(current.id);
+    }
+
+    current.description = data.get('description').trim();
+    current.amount = amount;
+    current.type = type;
+    current.categoryId = data.get('category');
+    current.bankId = data.get('bank');
+    current.date = data.get('date');
+    current.paymentMethod = paymentMethod;
+    current.cardId = isCreditCardPurchase ? data.get('cardId') : '';
+    current.installments = installments;
+    current.status = isCreditCardPurchase ? 'pending' : data.get('status');
+
+    if (isCreditCardPurchase) {
+      createInvoicesForCardPurchase(current);
+    }
+
+    saveState();
+    render();
+    closeEditTransactionModal();
+  });
+
 }
 
 function render() {
