@@ -407,10 +407,14 @@ function renderDashboard() {
         <p>Faturas em aberto: <strong>${fmtMoney(t.unpaidInvoices)}</strong></p>
       </section>
       <section class="card">
-        <h3>Destaques</h3>
-        <p>${state.transactions.length} movimentações cadastradas</p>
-        <p>${state.banks.length} bancos e ${state.cards.length} cartões vinculados</p>
-        <p>${state.categories.length} categorias disponíveis</p>
+        <h3>Saldo por banco</h3>
+        <div class="list">
+          ${state.banks.length
+            ? state.banks
+              .map((bank) => `<div class="list-item"><strong>${bank.name}</strong><strong>${fmtMoney(bank.balance)}</strong></div>`)
+              .join('')
+            : '<p class="muted">Nenhum banco cadastrado.</p>'}
+        </div>
       </section>
     </div>
     <div class="grid-2 mt">
@@ -422,6 +426,10 @@ function renderDashboard() {
         <h3>Despesas por categoria</h3>
         <canvas id="expense-chart" class="chart-canvas" width="600" height="260" aria-label="Gráfico de despesas por categoria"></canvas>
       </section>
+    </div>
+    <div class="card mt">
+      <h3>Evolução mensal: sobrou ou faltou no fechamento</h3>
+      <canvas id="monthly-result-chart" class="chart-canvas" width="1200" height="280" aria-label="Gráfico de evolução mensal de sobra ou falta"></canvas>
     </div>
   `;
 
@@ -440,6 +448,7 @@ function renderDashboard() {
 
   renderFlowChart(monthFilter);
   renderExpenseChart(monthFilter);
+  renderMonthlyResultChart();
 }
 
 function renderSelects() {
@@ -666,6 +675,95 @@ function openEditTransactionModal(id) {
 
   syncEditTransactionFormControls();
   document.getElementById('edit-transaction-modal').classList.remove('hidden');
+}
+
+function getMonthlyResultEvolution() {
+  const availableMonths = getAvailableMonths().slice().sort();
+  const months = availableMonths.length
+    ? availableMonths
+    : [new Date().toISOString().slice(0, 7)];
+
+  return months.map((monthKey) => {
+    const income = state.transactions
+      .filter((t) => t.type === 'income' && matchesMonth(t.date, monthKey))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const expense = state.transactions
+      .filter((t) => t.type === 'expense' && t.paymentMethod !== 'credit_card' && matchesMonth(t.date, monthKey))
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const invoicesDue = state.invoices
+      .filter((inv) => matchesMonth(inv.dueDate, monthKey))
+      .reduce((sum, inv) => sum + inv.amount, 0);
+
+    return {
+      key: monthKey,
+      label: monthLabel(monthKey),
+      result: income - expense - invoicesDue
+    };
+  });
+}
+
+function renderMonthlyResultChart() {
+  const canvas = document.getElementById('monthly-result-chart');
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width;
+  const h = canvas.height;
+  const padX = 50;
+  const padY = 35;
+  ctx.clearRect(0, 0, w, h);
+
+  const data = getMonthlyResultEvolution();
+  if (!data.length) return;
+
+  const maxAbs = Math.max(1, ...data.map((d) => Math.abs(d.result)));
+  const chartWidth = w - padX * 2;
+  const chartHeight = h - padY * 2;
+  const zeroY = padY + chartHeight / 2;
+  const stepX = data.length > 1 ? chartWidth / (data.length - 1) : 0;
+
+  ctx.strokeStyle = 'rgba(140,160,210,0.35)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(padX, zeroY);
+  ctx.lineTo(w - padX, zeroY);
+  ctx.stroke();
+
+  const points = data.map((d, index) => {
+    const x = padX + index * stepX;
+    const y = zeroY - (d.result / maxAbs) * (chartHeight / 2);
+    return { ...d, x, y };
+  });
+
+  ctx.beginPath();
+  points.forEach((point, index) => {
+    if (index === 0) ctx.moveTo(point.x, point.y);
+    else ctx.lineTo(point.x, point.y);
+  });
+  ctx.strokeStyle = '#4f7cff';
+  ctx.lineWidth = 2.5;
+  ctx.stroke();
+
+  points.forEach((point, index) => {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = point.result >= 0 ? '#26c281' : '#ef5b67';
+    ctx.fill();
+
+    const label = point.label.split(' de ')[0];
+    ctx.fillStyle = 'rgba(160,178,230,0.9)';
+    ctx.font = '11px Inter';
+    const labelX = point.x - 24;
+    ctx.fillText(label, Math.max(8, Math.min(w - 60, labelX)), h - 10);
+
+    if (index === points.length - 1) {
+      ctx.fillStyle = point.result >= 0 ? '#26c281' : '#ef5b67';
+      ctx.font = '12px Inter';
+      ctx.fillText(fmtMoney(point.result), Math.max(8, point.x - 40), Math.max(14, point.y - 8));
+    }
+  });
 }
 
 function getMonthlyFlow(monthFilter = 'all') {

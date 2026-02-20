@@ -13,6 +13,8 @@ Aplicação web responsiva para controle de finanças pessoais com foco em UX de
 - Tela de extrato consolidando movimentações e faturas.
 - Filtros no extrato por mês, tipo (despesa/receita) e categoria.
 - Seletor de mês no dashboard para análise mensal dos indicadores.
+- Dashboard com gráfico de linha da evolução mês a mês do resultado (sobrou/faltou no fechamento).
+- Dashboard com visão de saldo por banco.
 - Cadastro de bancos e cartões de crédito.
 - Sistema de faturas por cartão com ação "Marcar paga" que desconta automaticamente do saldo do banco, sem necessidade de cadastro manual de fatura.
 - Botão de ajuste de saldo por banco informando o novo saldo desejado; o sistema calcula automaticamente a diferença e registra no extrato.
