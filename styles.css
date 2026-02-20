@@ -64,6 +64,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: .75rem;
   margin-bottom: 1rem;
 }
 
@@ -163,7 +164,69 @@ button:disabled {
 
 @media (max-width: 980px) {
   .app-shell { grid-template-columns: 1fr; }
-  .sidebar { position: sticky; top: 0; z-index: 3; }
-  .main-nav { flex-direction: row; overflow: auto; }
+  .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    padding: .85rem .75rem;
+  }
+  .sidebar h1 { margin: 0 0 .65rem; font-size: 1.1rem; }
+  .main-nav {
+    flex-direction: row;
+    overflow-x: auto;
+    gap: .4rem;
+    padding-bottom: .25rem;
+  }
+  .main-nav button {
+    white-space: nowrap;
+    font-size: .88rem;
+    padding: .6rem .7rem;
+  }
   .grid-2, .metric-grid, .filters-row { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .content { padding: .75rem; }
+
+  .topbar {
+    flex-direction: column;
+    align-items: flex-start;
+    margin-bottom: .75rem;
+  }
+
+  #theme-toggle {
+    width: 100%;
+  }
+
+  .card {
+    padding: .85rem;
+    border-radius: .85rem;
+  }
+
+  h2 { font-size: 1.2rem; }
+  h3 { font-size: 1rem; margin-top: 0; }
+
+  .list-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: .7rem;
+  }
+
+  .list-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: .45rem;
+  }
+
+  .list-actions button {
+    width: 100%;
+  }
+
+  .metric strong { font-size: 1.05rem; }
+
+  .row-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
 }
