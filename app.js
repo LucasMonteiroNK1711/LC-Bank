@@ -11,6 +11,12 @@ const cloud = {
   status: 'Local apenas'
 };
 
+const FIREBASE_SDK_URLS = [
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js'
+];
+
 const defaultState = {
   theme: 'dark',
   banks: [{ id: crypto.randomUUID(), name: 'Banco Principal', openingBalance: 4500, balance: 4500 }],
@@ -131,16 +137,57 @@ function renderCloudStatus() {
   syncBtn.disabled = !cloud.user;
 }
 
+function loadExternalScript(src) {
+  return new Promise((resolve, reject) => {
+    const existing = document.querySelector(`script[data-src="${src}"]`);
+    if (existing) {
+      if (existing.dataset.loaded === 'true') {
+        resolve();
+      } else {
+        existing.addEventListener('load', () => resolve(), { once: true });
+        existing.addEventListener('error', () => reject(new Error(`Falha ao carregar ${src}`)), { once: true });
+      }
+      return;
+    }
+
+    const script = document.createElement('script');
+    script.src = src;
+    script.defer = true;
+    script.dataset.src = src;
+    script.onload = () => {
+      script.dataset.loaded = 'true';
+      resolve();
+    };
+    script.onerror = () => reject(new Error(`Falha ao carregar ${src}`));
+    document.head.appendChild(script);
+  });
+}
+
+async function ensureFirebaseSDK() {
+  if (window.firebase) return true;
+
+  try {
+    for (const src of FIREBASE_SDK_URLS) {
+      await loadExternalScript(src);
+    }
+    return Boolean(window.firebase);
+  } catch {
+    return false;
+  }
+}
+
 async function initCloud() {
   if (cloud.initialized) return;
-  if (!window.firebase) {
-    cloud.status = 'SDK de nuvem indisponível';
-    return;
-  }
 
   const raw = localStorage.getItem(CLOUD_CONFIG_KEY);
   if (!raw) {
     cloud.status = 'Nuvem não configurada';
+    return;
+  }
+
+  const sdkReady = await ensureFirebaseSDK();
+  if (!sdkReady) {
+    cloud.status = 'SDK de nuvem indisponível';
     return;
   }
 
@@ -1104,4 +1151,7 @@ bindForms();
 initThemeToggle();
 syncTransactionFormControls();
 render();
-initCloud().then(() => renderCloudStatus());
+
+if (localStorage.getItem(CLOUD_CONFIG_KEY)) {
+  initCloud().then(() => renderCloudStatus());
+}

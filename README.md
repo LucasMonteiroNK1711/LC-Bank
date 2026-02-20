@@ -39,6 +39,8 @@ Depois acesse `http://localhost:4173`.
 
 Após conectar, os dados passam a sincronizar automaticamente com o Firestore e você pode abrir o app no celular/tablet/computador usando a mesma conta.
 
+> Para melhorar performance em celular, os SDKs do Firebase agora são carregados sob demanda (somente quando a nuvem está configurada/conectada).
+
 
 ## Publicação do projeto (GitHub Pages)
 
