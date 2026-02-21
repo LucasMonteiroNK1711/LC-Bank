@@ -212,6 +212,11 @@ button.success { background: linear-gradient(135deg, #26c281, #169f69); }
 .mt { margin-top: 1.4rem; }
 .hidden { display: none; }
 
+.status-overdue {
+  color: var(--danger);
+  font-weight: 700;
+}
+
 .row-actions {
   display: flex;
   flex-wrap: wrap;

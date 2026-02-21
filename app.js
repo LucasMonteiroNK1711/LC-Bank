@@ -477,10 +477,20 @@ function getBankName(id) {
   return state.banks.find((b) => b.id === id)?.name ?? 'Sem banco';
 }
 
+function todayISODate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function isTransactionOverdue(transaction) {
+  return transaction.status === 'pending' && transaction.paymentMethod !== 'credit_card' && transaction.date < todayISODate();
+}
+
 function getStatementStatus(transaction) {
   if (transaction.paymentMethod === 'credit_card') {
     return 'Lançado no cartão';
   }
+
+  if (isTransactionOverdue(transaction)) return 'Atrasado';
 
   return transaction.status === 'paid' ? 'Compensado' : 'Previsto';
 }
@@ -936,21 +946,27 @@ function renderTransactions() {
   list.innerHTML = state.transactions
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date))
-    .map(
-      (t) => `
+    .map((t) => {
+      const statusLabel = t.status === 'paid'
+        ? 'Pago/Recebido'
+        : isTransactionOverdue(t)
+          ? '<span class="status-overdue">Atrasado</span>'
+          : 'Pendente';
+
+      return `
       <article class="list-item">
         <div>
           <strong>${t.description}</strong>
           <div class="meta">${getCategoryName(t.categoryId)} • ${getBankName(t.bankId)} • ${new Date(`${t.date}T12:00:00`).toLocaleDateString('pt-BR')}</div>
-          <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${t.status === 'paid' ? 'Pago/Recebido' : 'Pendente'} • ${getPaymentLabel(t)}</div>
+          <div class="meta">${t.type === 'expense' ? 'Despesa' : 'Receita'} • ${statusLabel} • ${getPaymentLabel(t)}</div>
         </div>
         <div class="list-actions">
           <strong>${fmtMoney(t.amount)}</strong>
           <button class="secondary small" data-action="edit-transaction" data-id="${t.id}">Editar</button>
           <button class="danger small" data-action="remove-transaction" data-id="${t.id}">Remover</button>
         </div>
-      </article>`
-    )
+      </article>`;
+    })
     .join('');
 }
 
