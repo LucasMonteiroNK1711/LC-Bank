@@ -6,6 +6,7 @@ Aplicação web responsiva para controle de finanças pessoais com foco em UX de
 
 - Dashboard inicial com métricas de saldo atual, receitas/despesas pagas e saldo previsto do mês.
 - Cadastro de despesas e receitas com data, categoria, banco e status (pago/pendente).
+- Movimentações com recorrência: sem repetição, repetição mensal por quantidade de meses ou até uma data final.
 - Edição de movimentações por modal (botão **Editar** na lista de movimentações).
 - Opção de forma de pagamento nas movimentações (débito/PIX/transferência ou cartão de crédito).
 - Compras no cartão geram faturas automaticamente e parcelamentos criam lançamentos para os meses subsequentes.

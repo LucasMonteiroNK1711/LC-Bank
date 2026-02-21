@@ -96,6 +96,19 @@
                     <option value="pending">Não pago / Não recebido</option>
                   </select>
                 </label>
+                <label>Repetição
+                  <select name="recurrence" id="transaction-recurrence">
+                    <option value="none">Não se repete</option>
+                    <option value="monthly_count">Repete por X meses</option>
+                    <option value="monthly_until">Repete até uma data final</option>
+                  </select>
+                </label>
+                <label id="transaction-recurrence-count-wrapper" class="hidden">Quantidade de meses
+                  <input type="number" name="recurrenceCount" id="transaction-recurrence-count" min="2" step="1" value="2" />
+                </label>
+                <label id="transaction-recurrence-until-wrapper" class="hidden">Repetir até
+                  <input type="date" name="recurrenceUntil" id="transaction-recurrence-until" />
+                </label>
                 <button type="submit">Adicionar movimentação</button>
               </form>
             </div>

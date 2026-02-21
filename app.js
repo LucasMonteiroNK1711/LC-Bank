@@ -520,6 +520,33 @@ function formatDate(dateObj) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function buildRecurringDates(baseDate, recurrenceMode, recurrenceCount, recurrenceUntil) {
+  const [year, month, day] = baseDate.split('-').map(Number);
+  const base = new Date(year, month - 1, day);
+  const dates = [baseDate];
+
+  if (recurrenceMode === 'monthly_count') {
+    const count = Math.max(1, Number(recurrenceCount) || 1);
+    for (let i = 1; i < count; i += 1) {
+      const next = buildDate(base.getFullYear(), base.getMonth() + i, day);
+      dates.push(formatDate(next));
+    }
+  }
+
+  if (recurrenceMode === 'monthly_until' && recurrenceUntil) {
+    const until = new Date(`${recurrenceUntil}T12:00:00`);
+    let i = 1;
+    while (i <= 120) {
+      const next = buildDate(base.getFullYear(), base.getMonth() + i, day);
+      if (next > until) break;
+      dates.push(formatDate(next));
+      i += 1;
+    }
+  }
+
+  return dates;
+}
+
 function getNextInvoiceDueDate(card, purchaseDateStr, installmentOffset = 0) {
   const [year, month, day] = purchaseDateStr.split('-').map(Number);
   const purchaseDate = new Date(year, month - 1, day);
@@ -604,6 +631,12 @@ function syncTransactionFormControls() {
   if (!enableCreditCard) {
     installmentsInput.value = '1';
   }
+
+  const recurrenceSelect = document.getElementById('transaction-recurrence');
+  const recurrenceCountWrapper = document.getElementById('transaction-recurrence-count-wrapper');
+  const recurrenceUntilWrapper = document.getElementById('transaction-recurrence-until-wrapper');
+  recurrenceCountWrapper.classList.toggle('hidden', recurrenceSelect.value !== 'monthly_count');
+  recurrenceUntilWrapper.classList.toggle('hidden', recurrenceSelect.value !== 'monthly_until');
 }
 
 function syncEditTransactionFormControls() {
@@ -1230,29 +1263,35 @@ function bindForms() {
     const bankId = data.get('bank');
     const rawStatus = data.get('status');
     const paymentMethod = data.get('paymentMethod');
+    const recurrenceMode = data.get('recurrence') || 'none';
+    const recurrenceCount = Number(data.get('recurrenceCount')) || 1;
+    const recurrenceUntil = data.get('recurrenceUntil') || '';
     const isCreditCardPurchase = type === 'expense' && paymentMethod === 'credit_card';
     const installments = isCreditCardPurchase ? Math.max(1, Number(data.get('installments')) || 1) : 1;
     const status = isCreditCardPurchase ? 'pending' : rawStatus;
+    const dates = buildRecurringDates(data.get('date'), recurrenceMode, recurrenceCount, recurrenceUntil);
 
-    const transaction = {
-      id: crypto.randomUUID(),
-      description: data.get('description').trim(),
-      amount,
-      type,
-      categoryId: data.get('category'),
-      bankId,
-      date: data.get('date'),
-      status,
-      paymentMethod,
-      cardId: isCreditCardPurchase ? data.get('cardId') : '',
-      installments
-    };
+    dates.forEach((dateValue) => {
+      const transaction = {
+        id: crypto.randomUUID(),
+        description: data.get('description').trim(),
+        amount,
+        type,
+        categoryId: data.get('category'),
+        bankId,
+        date: dateValue,
+        status,
+        paymentMethod,
+        cardId: isCreditCardPurchase ? data.get('cardId') : '',
+        installments
+      };
 
-    state.transactions.push(transaction);
+      state.transactions.push(transaction);
 
-    if (isCreditCardPurchase) {
-      createInvoicesForCardPurchase(transaction);
-    }
+      if (isCreditCardPurchase) {
+        createInvoicesForCardPurchase(transaction);
+      }
+    });
 
     e.target.reset();
     syncTransactionFormControls();
@@ -1265,6 +1304,10 @@ function bindForms() {
   });
 
   document.getElementById('transaction-payment-method').addEventListener('change', () => {
+    syncTransactionFormControls();
+  });
+
+  document.getElementById('transaction-recurrence').addEventListener('change', () => {
     syncTransactionFormControls();
   });
 
